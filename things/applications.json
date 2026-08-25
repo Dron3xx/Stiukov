@@ -1,0 +1,20 @@
+{
+    "applications": {
+        "notepad": {
+            "process": "notepad.exe",
+            "path": "notepad.exe"
+        },
+        "calculator": {
+            "process": "CalculatorApp.exe",
+            "path": "YOUR_PATH_HERE"
+        },
+        "opera": {
+            "process": "opera.exe",
+            "path": "YOUR_PATH_HERE"
+        },
+        "edge": {
+            "process": "msedge.exe",
+            "path": "YOUR_PATH_HERE"
+        }
+    }
+}

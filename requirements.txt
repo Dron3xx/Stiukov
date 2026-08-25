@@ -1,0 +1,11 @@
+speechrecognition
+pyttsx3
+keyboard
+pyautogui
+pyperclip
+psutil
+opencv-python
+numpy
+Pillow
+pycaw
+tensorflow

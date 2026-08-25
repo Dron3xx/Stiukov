@@ -1,0 +1,17 @@
+{
+    "jokes": {
+      "joke_1": {
+        "question": "Why don't scientists trust atoms?",
+        "answer": "Because they make up everything!"
+      },
+      "joke_2": {
+        "question": "What's orange and sounds like a parrot?",
+        "answer": "A carrot!"
+      },
+      "joke_3": {
+        "question": "Why did the scarecrow win an award?",
+        "answer": "Because he was outstanding in his field!"
+      }
+    }
+  }
+  

@@ -8,6 +8,8 @@ import random
 import threading
 import subprocess
 import json
+import winreg
+import win32api
 
 # =========================
 # VOICE
@@ -57,6 +59,7 @@ jokes_file_path = os.path.join(things_directory, "jokes.json")
 
 
 def is_stiukov(voice_data):
+    # Include common speech-recognition variations of the assistant name.
     wake_words = [
         "stuck off",
         "stucco",
@@ -68,7 +71,8 @@ def is_stiukov(voice_data):
         "sick off",
         "stupid",
         "take off",
-        "speaker"
+        "speaker",
+        "sick off"
     ]
 
     for word in wake_words:
@@ -85,6 +89,7 @@ assistant_active = False
 def wake_word_detector(voice_data):
     global assistant_active
 
+    # Activate the assistant and remove the wake word before dispatching.
     wake_word = is_stiukov(voice_data)
 
     if wake_word:
@@ -145,15 +150,17 @@ def respond(voice_data):
         return
 
     if voice_data:
-        # Split the recognized voice_data into individual words
+        # Keep a simple history of recognized command words.
         words = voice_data.split()
-        # Save the words to the file
         save_words_to_file(words)
 
 
     if "go to sleep" in voice_data:
         assistant_active = False
         speak("Going to sleep.")
+        return
+
+    if search_applications(voice_data):
         return
 
     if handle_greeting(voice_data):
@@ -173,6 +180,32 @@ def respond(voice_data):
 
     speak("I can't help you with it yet")
 
+def search_applications(voice_data):
+    # Inspect application paths registered for the current Windows user.
+    reg_path = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
+    if "search applications" in voice_data:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ) as parent_key:
+            i = 0
+            apps = {}
+            while True:
+                try:
+                    sub_key = winreg.EnumKey(parent_key, i)
+                    with winreg.OpenKey(parent_key, sub_key, 0, winreg.KEY_READ) as child_key:
+                        try:
+                            value, _ = winreg.QueryValueEx(child_key, "")
+                            print("sub_key:", sub_key)
+                            print("Value:", value)
+                            print(os.path.exists(value))
+                        except FileNotFoundError:
+                            pass
+                    i += 1
+                except OSError:
+                    break
+        #winreg.QueryValueEx()
+
+    return False
+
+
 def handle_joke(voice_data):
     if "joke" in voice_data:
         joke = random.choice(list(jokes.values()))
@@ -191,7 +224,8 @@ def handle_greeting(voice_data):
 
 def handle_application(voice_data):
     for app_name in applications:
-        process_name = applications[app_name]["process"]
+        # Normalize process names because Windows names are case-insensitive.
+        process_name = applications[app_name]["process"].lower()
         if "close "+ app_name in voice_data:
             for process in psutil.process_iter(["name"]):
                 try:
@@ -226,6 +260,7 @@ def handle_web_command(voice_data):
     return False
 
 def handle_volume(voice_data):
+    # Use the default Windows speaker endpoint for all volume commands.
     devices = AudioUtilities.GetSpeakers()
     volume = devices.EndpointVolume
 
@@ -256,6 +291,7 @@ def handle_volume(voice_data):
     return False
 
 def load_greetings():
+    # Keep response text in JSON so it can be edited without changing logic.
     with open(greetings_file_path, "r", encoding="utf-8") as file:
         greetings_data = json.load(file)
     return greetings_data["greetings"]
@@ -280,6 +316,7 @@ applications = load_applications()
 
 while True:
     try:
+        # Listen continuously and recover from errors without exiting.
         voice_data = record_audio()
 
         if not voice_data:

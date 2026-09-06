@@ -181,28 +181,7 @@ def respond(voice_data):
     speak("I can't help you with it yet")
 
 def search_applications(voice_data):
-    # Inspect application paths registered for the current Windows user.
-    reg_path = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
     if "search applications" in voice_data:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ) as parent_key:
-            i = 0
-            apps = {}
-            while True:
-                try:
-                    sub_key = winreg.EnumKey(parent_key, i)
-                    with winreg.OpenKey(parent_key, sub_key, 0, winreg.KEY_READ) as child_key:
-                        try:
-                            value, _ = winreg.QueryValueEx(child_key, "")
-                            print("sub_key:", sub_key)
-                            print("Value:", value)
-                            print(os.path.exists(value))
-                        except FileNotFoundError:
-                            pass
-                    i += 1
-                except OSError:
-                    break
-        #winreg.QueryValueEx()
-
     return False
 
 

@@ -1,213 +1,215 @@
 import winreg
 import os
-import ctypes
+import re
+from pathlib import Path
+import win32com.client
+import subprocess
+import json
 
 
-# Version.dll stores metadata inside Windows executables, but it exposes that
-# metadata through C functions rather than a Python object. ctypes lets this
-# script call those functions directly without adding another Windows package.
-version = ctypes.WinDLL("Version.dll")
+def exe_path(clear_command):
+    match = re.search(r'["\']?([^"\']+\.exe)["\']?', clear_command, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return None
 
-# Tell ctypes the exact native signature so Python passes strings, integers,
-# pointers, and the output buffer in the format expected by Windows.
-version.GetFileVersionInfoW.argtypes = [
-    ctypes.c_wchar_p,   # lpFileName
-    ctypes.c_uint32,    # dwHandle
-    ctypes.c_uint32,    # dwLen
-    ctypes.c_void_p     # lpData
-]
 
-# Windows returns a success/failure integer from this function.
-version.GetFileVersionInfoW.restype = ctypes.c_int
-
-# This call is made before reading the version resource because the resource
-# size varies between executable files and must be allocated dynamically.
-version.GetFileVersionInfoSizeW.argtypes = [
-    ctypes.c_wchar_p,
-    ctypes.POINTER(ctypes.c_uint32)
-]
-
-# A zero size indicates that the executable has no readable version resource.
-version.GetFileVersionInfoSizeW.restype = ctypes.c_uint32
-
-# VerQueryValueW receives the loaded resource, a path inside that resource,
-# and pointers where Windows writes the address and size of the result.
-version.VerQueryValueW.argtypes = [
-    ctypes.c_void_p,
-    ctypes.c_wchar_p,
-    ctypes.POINTER(ctypes.c_void_p),
-    ctypes.POINTER(ctypes.c_uint)
-]
-
-# Windows reports whether the resource query succeeded as an integer.
-version.VerQueryValueW.restype = ctypes.c_int
-
-# App Paths contains executable locations registered for the current user, so
-# it can find installed applications without searching every disk directory.
-reg_path = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
-
-def read_file_metadata(file_path):
+def find_lnk(lnk_path):
     try:
-        # Windows needs an output variable for the file handle, even though the
-        # handle is not used later by GetFileVersionInfoSizeW.
-        handle = ctypes.c_uint32()
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shortcut = shell.CreateShortCut(str(lnk_path))
+        return shortcut.TargetPath
+    except Exception:
+        return None
 
-        # Ask Windows how many bytes are required for this file's complete
-        # version resource. A fixed-size buffer would fail for larger files.
-        size = version.GetFileVersionInfoSizeW(
-            file_path,
-            ctypes.byref(handle)
+
+def launcher_search():
+    launchers = {}
+
+    protocol_blacklist = {
+        'http', 'https', 'ftp', 'mailto', 'tel', 'file', 'ms-', 'windows',
+        'chrome', 'firefox', 'opera', 'edge', 'discord', 'spotify', 'zoom',
+        'skype', 'teams', 'adobe', 'vscode', 'onenote', 'outlook', 'vlc'
+        }
+
+    path_blacklist = {
+            r"\steamapps\common"
+        }
+
+    game_key_words = [
+        'games', 'gry', 'steam', 'epic', 'battle.net', 'origin', 
+        'gog', 'ubisoft', 'uplay', 'riot', 'launcher', 'xbox', 'minecraft'
+        ]
+    def registry_search():
+        try: 
+            root_key = winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "")
+            value, _, _ = winreg.QueryInfoKey(root_key)
+
+            for i in range(value):
+                try:
+                    key_name = winreg.EnumKey(root_key, i)
+
+                    if any(key_name.lower().startswith(x) for x in protocol_blacklist):
+                        continue
+
+                    protocol = winreg.OpenKey(root_key, key_name)
+                    try:
+                        winreg.QueryValueEx(protocol, "URL protocol")
+                    except FileNotFoundError:
+                        winreg.CloseKey(protocol)
+                        continue
+
+                    try:
+                        command_path = rf"{key_name}\shell\open\command"
+                        key_command = winreg.OpenKey(root_key, command_path)
+                        command, _ = winreg.QueryValueEx(key_command, "")
+                        winreg.CloseKey(key_command)
+
+                        if command:
+                            clear_path = exe_path(command)
+
+                            if clear_path and Path(clear_path).exists():
+                                full_str_path = clear_path.lower()
+                                
+                                if any(path in clear_path for path in path_blacklist):
+                                    continue
+
+                                for x in game_key_words:
+                                    if x in full_str_path or x in key_name.lower():
+                                        app_name = Path(clear_path).stem
+                                        launchers[app_name] = {
+                                            "Path": clear_path,
+                                            "AppID": None,
+                                            "Protocol": f"{key_name}://",
+                                            "Keyword": x,
+                                        }
+
+                                        break
+                    except FileNotFoundError:
+                        pass
+
+                    winreg.CloseKey(protocol)
+
+                except Exception:
+                    continue
+
+            winreg.CloseKey(root_key)
+        except Exception as e:
+            print(f"Registry read error: {e}")
+
+        return launchers
+
+
+    def start_menu_search():
+        appdata = os.environ.get("APPDATA", "")
+        programdata = os.environ.get("PROGRAMDATA", "")
+
+        start_menu_path = [
+            Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
+            Path(programdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+        ]
+
+        for start_path in start_menu_path:
+            if not start_path.exists():
+                continue
+
+            for file in start_path.rglob("*"):
+                if file.is_file() and file.suffix.lower() == ".lnk":
+                    file_name = file.stem.lower()
+
+                    if any(word in file_name for word in game_key_words):
+                        shortcut_point = find_lnk(file)
+
+                        if shortcut_point and Path(shortcut_point).exists():
+                            shortcut_point_lower = shortcut_point.lower()
+
+                            for x in game_key_words:
+                                if x in file_name or x in shortcut_point_lower:
+                                    launchers[file.stem] = {
+                                        "Path": shortcut_point,
+                                        "AppID": None,
+                                        "Protocol": None,
+                                        "Keyword": x
+                                    }
+                                    break
+
+        return launchers
+
+
+    def appx_search():
+        ps_command = (
+            'Get-StartApps | '
+            'Where-Object {$_.Name -like "*Minecraft*"} | '
+            'Select-Object Name, AppID | '
+            'ConvertTo-Json'
         )
-        print(size)
+        results = subprocess.run(
+            ["powershell", "-Command", ps_command], 
+            capture_output=True, 
+            text=True, 
+            encoding='utf-8'
+        )
 
-        if size == 0:
-            raise Exception("GetFileVersionInfoSizeW failed")
+        if results.stdout.strip():
+            app_data = json.loads(results.stdout)
+
+            if isinstance(app_data, dict):
+                app_data = [app_data]
+
+            for app in app_data:
+                app_name = app.get("Name")
+                app_id = app.get("AppID")
+
+                launchers[app_name] = {
+                    "Path": app.get("InstallLocation"),
+                    "AppID": app_id,
+                    "Protocol": None,
+                    "Keyword": "minecraft"
+                }
+        else:
+            print("Nothing found")
+        return launchers
+
+    appx_search()
+    start_menu_search()
+    registry_search()
+
+    return launchers
+
+
+def remove_duplicates(launchers):
+    unique_launchers = {}
+
+    for name, data in launchers.items():
+        path = data.get("Path")
+
+        if path:
+            path_key = path.lower()
+
+            if path_key not in [
+                (app.get("Path") or "").lower()
+                for app in unique_launchers.values()
+                ]:
+                unique_launchers[name] = data
 
         else:
-            # Store the native version resource in writable memory so its
-            # address can be passed to the later VerQueryValueW calls.
-            pBlock = ctypes.create_string_buffer(size)
+            unique_launchers[name] = data
 
-            # Load the resource bytes into pBlock. The zero handle means the
-            # file path is used directly; the size matches the allocation above.
-            print(version.GetFileVersionInfoW(file_path, 0, size, pBlock))
+    return unique_launchers
 
-            # VerQueryValueW writes a pointer to the requested value here and
-            # writes that value's byte length into the separate size variable.
-            buffer = ctypes.c_void_p()
-            bufpoint = ctypes.byref(buffer)
 
-            point = ctypes.c_uint()
-            poipoint = ctypes.byref(point)
+if __name__ == "__main__":
+    print("Searching for games launchers")
+    results = launcher_search()
+    results = remove_duplicates(results)
 
-            # First query the translation table. It tells us which language and
-            # code page must be included in the localized StringFileInfo path.
-            result = version.VerQueryValueW(
-                pBlock,
-                r"\VarFileInfo\Translation",
-                bufpoint,
-                poipoint
-            )
-
-            print(result)
-            print("buffer:", buffer)
-            print("buffer.value:", buffer.value)
-            print("point:", point.value)
-
-            # The translation table contains pairs of 16-bit values. Defining
-            # the native layout lets ctypes read those values from the pointer.
-            class LANGANDCODEPAGE(ctypes.Structure):
-                _fields_ = [
-                    ("wLanguage", ctypes.c_ushort),
-                    ("wCodePage", ctypes.c_ushort)
-                ]
-
-            translation = ctypes.cast(buffer, ctypes.POINTER(LANGANDCODEPAGE))
-            language = translation.contents.wLanguage
-            codepage = translation.contents.wCodePage
-
-            print("Language:", language)
-            print("CodePage:", codepage)
-
-            # Resource paths use four-digit hexadecimal language and code-page
-            # identifiers, not their decimal Python representations.
-            print("Language HEX:", f"{language:04x}")
-            print("CodePage HEX:", f"{codepage:04x}")
-
-            # StringFileInfo is the localized text section. FileDescription is
-            # the human-readable application name stored inside that section.
-            sub_block = f"\\StringFileInfo\\{language:04x}{codepage:04x}\\FileDescription"
-
-            print("SubBlock:", sub_block)
-
-            # Querying text uses the same pointer pattern as the translation
-            # lookup: Windows returns the address and length through pointers.
-            sub_block_buffer = ctypes.c_void_p()
-            sub_block_bufpoint = ctypes.byref(sub_block_buffer)
-
-            sub_block_point = ctypes.c_uint()
-            sub_block_poipoint = ctypes.byref(sub_block_point)
-
-            # Retrieve the description using the language-specific resource
-            # path assembled above.
-            sub_block_result = version.VerQueryValueW(
-                pBlock,
-                sub_block,
-                sub_block_bufpoint,
-                sub_block_poipoint
-            )
-
-            # The returned address points to a wide-character string, so cast
-            # it before reading the value as normal Python text.
-            sub_block_value = ctypes.cast(sub_block_buffer, ctypes.c_wchar_p).value
-            print("SubBlock Result:", sub_block_result)
-            print("SubBlock Value:", sub_block_value)
-
-    except Exception as error:
-        print("Version info error:", error)
-
-    
-def search_registry_apps():
-    # Enumerate App Paths because registered applications can be found even
-    # when their installation folders are unknown to the disk scanner.
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ) as parent_key:
-        i = 0
-        apps = {}
-        print("START")
-        while True:
-            try:
-                # Each registry subkey represents one registered application.
-                sub_key = winreg.EnumKey(parent_key, i)
-
-                with winreg.OpenKey(parent_key, sub_key, 0, winreg.KEY_READ) as child_key:
-                
-                    # The unnamed registry value stores the executable path;
-                    # registration may wrap that path in quotation marks.
-                    value, _ = winreg.QueryValueEx(child_key, "")
-                    value = value.lstrip('"').rstrip('"')
-                    print("VALUE:", value)
-                    print("sub_key:", sub_key)
-                    print(os.path.exists(value))
-                    print(os.path.isfile(value))
-                    print(version)
-                    read_file_metadata(value)
-                i += 1
-            except OSError:
-                break
-
-def search_disk():
-    # Registry entries do not cover every executable, so recursively inspect
-    # the configured library folders as a second discovery source.
-    path = {
-        "steam": r"D:\SteamLibrary\steamapps\common",
-        "blizzard": r"D:\Blizzard",
-        "cracks": r"D:\Cracks",
-        "xbox": r"D:\XboxGames"
-    }
-    print(os.path.exists(path["steam"]))
-    print(os.path.exists(path["blizzard"]))
-    print(os.path.exists(path["cracks"]))
-    print(os.path.exists(path["xbox"]))
-    i = 0
-    for name, value in path.items():
-        if os.path.exists(value):
-            # os.walk visits nested game/application folders without requiring
-            # a separate search for every possible installation depth.
-            for root, dirs, files in os.walk(value):
-                for file in files:
-                    if file.endswith(".exe"):
-                        # Metadata is read only for executables because the
-                        # Version.dll resource belongs to the file itself.
-                        file_path = os.path.join(root,file)
-                        print(f"Found executable: {file_path}")
-                        read_file_metadata(file_path)
-                        i += 1
-                        print(i)
-
-def analyze_apps():
-    # Run both the registry and configured-folder searches together.
-    search_registry_apps()
-    search_disk()
-
-# Run the disk scan when this script is executed.
-search_disk()
+    if results:
+        for app, data in results.items():
+            print(f" App: [ {app} ]")
+            print(f"   -> Protocol: {data['Protocol']}")
+            print(f"   -> Path: {data['Path']}\n")
+            print(f"   -> Keyword: {data['Keyword']}")
+            if data.get("AppID"):
+                print(f"   -> AppID: {data.get('AppID')}")
+    else:
+        print("No launcher found")

@@ -23,6 +23,27 @@ def find_lnk(lnk_path):
         return None
 
 
+def remove_duplicates(launchers):
+    unique_launchers = {}
+
+    for name, data in launchers.items():
+        path = data.get("Path")
+
+        if path:
+            path_key = path.lower()
+
+            if path_key not in [
+                (app.get("Path") or "").lower()
+                for app in unique_launchers.values()
+                ]:
+                unique_launchers[name] = data
+
+        else:
+            unique_launchers[name] = data
+
+    return unique_launchers
+
+
 def launcher_search():
     launchers = {}
 
@@ -174,28 +195,9 @@ def launcher_search():
     start_menu_search()
     registry_search()
 
+    launchers = remove_duplicates(launchers)
+
     return launchers
-
-
-def remove_duplicates(launchers):
-    unique_launchers = {}
-
-    for name, data in launchers.items():
-        path = data.get("Path")
-
-        if path:
-            path_key = path.lower()
-
-            if path_key not in [
-                (app.get("Path") or "").lower()
-                for app in unique_launchers.values()
-                ]:
-                unique_launchers[name] = data
-
-        else:
-            unique_launchers[name] = data
-
-    return unique_launchers
 
 
 if __name__ == "__main__":

@@ -12,6 +12,11 @@ import winreg
 import win32api
 
 # =========================
+# LOCAL MODULES
+# =========================
+from apps_search import launcher_search
+
+# =========================
 # VOICE
 # =========================
 import speech_recognition as sr
@@ -55,8 +60,6 @@ things_directory = os.path.join(current_directory, "things")
 applications_file_path = os.path.join(things_directory, "applications.json")
 greetings_file_path = os.path.join(things_directory, "greetings.json")
 jokes_file_path = os.path.join(things_directory, "jokes.json")
-
-
 
 def is_stiukov(voice_data):
     # Include common speech-recognition variations of the assistant name.
@@ -160,7 +163,7 @@ def respond(voice_data):
         speak("Going to sleep.")
         return
 
-    if search_applications(voice_data):
+    if search_launchers(voice_data):
         return
 
     if handle_greeting(voice_data):
@@ -179,10 +182,6 @@ def respond(voice_data):
         return
 
     speak("I can't help you with it yet")
-
-def search_applications(voice_data):
-    if "search applications" in voice_data:
-    return False
 
 
 def handle_joke(voice_data):
@@ -204,8 +203,21 @@ def handle_greeting(voice_data):
 def handle_application(voice_data):
     for app_name in applications:
         # Normalize process names because Windows names are case-insensitive.
-        process_name = applications[app_name]["process"].lower()
-        if "close "+ app_name in voice_data:
+        if "open "+ app_name.lower() in voice_data:
+            path = applications[app_name]["Path"]
+            app_id = applications[app_name]["AppID"]
+            if not path:
+                subprocess.run([
+                    "explorer.exe",
+                    f"shell:AppsFolder\\{app_id}"
+                ])
+            else:
+                os.startfile(path)
+
+            speak("Opening "+ app_name)
+            return True
+        if "close "+ app_name.lower() in voice_data:
+            process_name = applications[app_name]["process"].lower()
             for process in psutil.process_iter(["name"]):
                 try:
                     name = process.info["name"]
@@ -223,10 +235,6 @@ def handle_application(voice_data):
 
             speak(app_name +" is not running")
             return True
-        if "open "+ app_name in voice_data:
-            os.startfile(applications[app_name]["path"])
-            speak("Opening "+ app_name)
-            return True
 
     return False
 
@@ -237,6 +245,7 @@ def handle_web_command(voice_data):
         return True
 
     return False
+
 
 def handle_volume(voice_data):
     # Use the default Windows speaker endpoint for all volume commands.
@@ -268,6 +277,39 @@ def handle_volume(voice_data):
         return True
 
     return False
+
+
+def search_and_save_launchers():
+    launchers = launcher_search()
+
+    if not launchers:
+        print("No launchers found")
+        return False
+
+    with open(applications_file_path, "w", encoding="utf-8") as file:
+        json.dump(
+            {"applications": launchers},
+            file,
+            indent=4,
+            ensure_ascii=False
+        )
+
+    speak("Found and saved launchers to applications file")
+    print(f"Saved {len(launchers)} launchers to applications.json")
+
+    return True
+
+def search_launchers(voice_data):
+    if "search applications" in voice_data:
+        search_and_save_launchers()
+        return True
+
+    return False
+
+
+if not os.path.exists(applications_file_path):
+    search_and_save_launchers()
+
 
 def load_greetings():
     # Keep response text in JSON so it can be edited without changing logic.

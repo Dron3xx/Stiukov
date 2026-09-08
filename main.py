@@ -335,21 +335,22 @@ def load_applications():
 
 applications = load_applications()
 
-while True:
-    try:
-        # Listen continuously and recover from errors without exiting.
-        voice_data = record_audio()
-
-        if not voice_data:
-            continue
-
-        if not assistant_active:
-            voice_data = wake_word_detector(voice_data)
+if __name__ == "__main__":
+    while True:
+        try:
+            # Listen continuously and recover from errors without exiting.
+            voice_data = record_audio()
 
             if not voice_data:
                 continue
 
-        respond(voice_data)
+            if not assistant_active:
+                voice_data = wake_word_detector(voice_data)
 
-    except Exception as error:
-        print(f"The assistant recovered from an error: {error}")
+                if not voice_data:
+                    continue
+
+            respond(voice_data)
+
+        except Exception as error:
+            print(f"The assistant recovered from an error: {error}")

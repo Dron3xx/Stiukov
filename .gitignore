@@ -223,3 +223,6 @@ __marimo__/
 
 # Locally generated speech recognition data
 saved_words.txt
+
+# Local paths
+things/applications.json

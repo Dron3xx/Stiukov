@@ -1,4 +1,4 @@
-import ruff
-import pytest
-import pytest-archon
-import language_tool_python
+import subprocess
+
+subprocess.run(["ruff", "check", "."])
+subprocess.run(["pytest"])

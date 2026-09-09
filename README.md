@@ -1,8 +1,10 @@
 # Stiukov
 
-Stiukov is a Windows voice assistant written in Python. It is a personal project focused on voice interaction, desktop automation, and learning Python through practical development.
+Stiukov is a Windows voice assistant written in Python. It focuses on voice interaction, desktop automation, and hands-on Python development.
 
 The assistant can recognize wake words, respond to greetings and jokes, launch and close configured applications, open YouTube, and control system volume. The repository also includes `apps_search.py`, a separate exploratory script for finding executable files and reading Windows file metadata.
+
+> Note: "Stiukov" is the project name and may be flagged by spell-checkers as a proper noun.
 
 ## Features
 

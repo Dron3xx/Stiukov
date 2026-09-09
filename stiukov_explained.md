@@ -2,6 +2,8 @@
 
 This file explains how the Stiukov voice assistant is structured, how a spoken command moves through the program, and how the supporting configuration files are used.
 
+> Note: "Stiukov" is the project name and may be flagged by spell-checkers as a proper noun.
+
 ## 1) Project purpose
 
 Stiukov is a Windows desktop voice assistant written in Python. The current implementation combines:

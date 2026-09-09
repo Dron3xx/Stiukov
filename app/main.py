@@ -10,11 +10,12 @@ import subprocess
 import json
 import winreg
 import win32api
+from pathlib import Path
 
 # =========================
 # LOCAL MODULES
 # =========================
-from apps_search import launcher_search
+from app.apps_search import launcher_search
 
 # =========================
 # VOICE
@@ -53,13 +54,15 @@ from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
 # =========================
 from tensorflow.keras.models import load_model
 
-current_directory = os.path.dirname(os.path.abspath(__file__))
 
-things_directory = os.path.join(current_directory, "things")
+project_dir = Path(__file__).parent.parent
 
-applications_file_path = os.path.join(things_directory, "applications.json")
-greetings_file_path = os.path.join(things_directory, "greetings.json")
-jokes_file_path = os.path.join(things_directory, "jokes.json")
+things_directory = project_dir / "things"
+
+applications_file_path = things_directory / "applications.json"
+greetings_file_path = things_directory / "greetings.json"
+jokes_file_path = things_directory / "jokes.json"
+
 
 def is_stiukov(voice_data):
     # Include common speech-recognition variations of the assistant name.
@@ -120,7 +123,7 @@ def speak(text):
 
 
 def save_words_to_file(words):
-    saved_words_file_path = os.path.join(current_directory, "saved_words.txt")
+    saved_words_file_path = os.path.join(project_dir, "saved_words.txt")
     with open(saved_words_file_path, "a", encoding="utf-8") as file:
         file.write(" ".join(words) + "\n")
 

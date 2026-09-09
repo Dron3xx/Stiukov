@@ -1,4 +1,5 @@
 ruff
 pytest
 pytest-archon
-language_tool_python
+language-tool-python
+regex

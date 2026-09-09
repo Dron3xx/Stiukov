@@ -1,12 +1,12 @@
-from pathlib import Path
 import json
-from unittest.mock import patch, MagicMock
-import main
-from main import (
-    search_and_save_launchers, 
-    search_launchers, 
-    load_applications, 
-    handle_application
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from app.main import (
+    handle_application,
+    load_applications,
+    search_and_save_launchers,
+    search_launchers
 )
 
 project_dir = Path(__file__).parent.parent
@@ -16,7 +16,7 @@ def test_things_directory_exists():
     assert (project_dir / "things").exists()
 
 
-@patch("main.launcher_search")
+@patch("app.main.launcher_search")
 def test_search_and_save_launchers(
         mock_launcher_search, 
         tmp_path
@@ -39,7 +39,7 @@ def test_search_and_save_launchers(
     assert test_file.exists()
 
 
-@patch("main.launcher_search")
+@patch("app.main.launcher_search")
 def test_failed_search_launchers(mock_search_and_save):
 
     mock_search_and_save.return_value = {}
@@ -57,7 +57,7 @@ def test_search_launchers(mock_search_and_save):
     mock_search_and_save.assert_called_once()
 
 
-@patch("main.search_and_save_launchers")
+@patch("app.main.search_and_save_launchers")
 def test_failed_seatch_launchers(mock_search_and_save):
 
     result = search_launchers("hi")
@@ -86,8 +86,8 @@ def test_load_applications(tmp_path):
     assert result == test_data["applications"]
 
 
-@patch("main.os.startfile")
-@patch("main.speak")
+@patch("app.main.os.startfile")
+@patch("app.main.speak")
 def test_open_application(
         mock_speak,
         mock_startfile
@@ -107,8 +107,8 @@ def test_open_application(
     mock_speak.assert_called_once_with("Opening Steam")
 
 
-@patch("main.psutil.process_iter")
-@patch("main.speak")
+@patch("app.main.psutil.process_iter")
+@patch("app.main.speak")
 def test_close_application(
         mock_speak,
         mock_process_iter

@@ -151,7 +151,7 @@ When speech is recognized:
 - if no wake word is found, the input is ignored
 - if the assistant is active, or a wake word activated it, the remaining speech is passed to `respond()`
 
-The loop is wrapped in exception handling so an unexpected runtime error is printed instead of immediately terminating the assistant.
+The loop is wrapped in exception handling, so an unexpected runtime error is printed instead of immediately terminating the assistant.
 
 Why this matters:
 
@@ -202,7 +202,7 @@ The function initializes `pyttsx3`, configures the speech rate and volume, sends
 
 Why this matters:
 
-The assistant can provide both visible console feedback and spoken responses without relying on an external text-to-speech service.
+The assistant can provide both visible console feedback and spoken responses without relying on an external speech synthesis service.
 
 ---
 

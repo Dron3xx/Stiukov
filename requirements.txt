@@ -4,7 +4,7 @@ keyboard
 pyautogui
 pyperclip
 psutil
-opencv-python
+opencv-python-headless
 numpy
 Pillow
 pycaw

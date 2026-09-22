@@ -17,7 +17,9 @@ def test_things_directory_exists():
 
 
 @patch("app.main.launcher_search")
+@patch("app.main.speak")
 def test_search_and_save_launchers(
+        mock_speak,
         mock_launcher_search, 
         tmp_path
     ):

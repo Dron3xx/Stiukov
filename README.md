@@ -127,6 +127,52 @@ Stiukov/
 
 `things/applications.json` is generated at runtime when the application catalog does not exist and is not part of the checked-in repository structure.
 
+## Docker Test Environment
+
+The project includes a Windows-based Docker environment used to run the test suite in a reproducible environment and reduce "works on my machine" issues.
+
+The container is based on Windows Server Core with Python 3.11 and includes the dependencies required by the application and test suite, including:
+
+- Java 17 for LanguageTool
+- Microsoft Visual C++ Redistributable
+- application dependencies
+- development and testing dependencies
+- pytest
+- OpenCV Headless
+
+The Docker environment is intended primarily for testing rather than running the full Stiukov assistant.
+
+### Running Tests
+
+Build the Docker image:
+
+```powershell
+docker build -t stiukov-tests .
+```
+
+Run the test suite:
+
+docker run --rm stiukov-tests
+
+The container runs the complete pytest suite automatically.
+
+A successful run should report all tests as passed, for example:
+
+================== 12 passed, 2 warnings in 77.74s ==================
+
+The warnings currently come from the SpeechRecognition dependency using Python modules that are deprecated and planned for removal in Python 3.13. They do not currently cause test failures.
+
+Development Workflow
+
+Docker is used as an additional reproducible test environment:
+
+Develop and test changes locally.
+Run the test suite locally during development.
+Run the Docker test environment after significant changes.
+Use the Docker test run as a final environment-independent verification before committing changes.
+
+This helps detect platform-specific dependency and environment issues that may not appear during local development.
+
 ## Notes
 
 - The project is Windows-specific because it uses Windows APIs and components such as `winreg`, `os.startfile`, Windows audio APIs, and PowerShell.

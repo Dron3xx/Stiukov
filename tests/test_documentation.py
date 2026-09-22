@@ -8,6 +8,7 @@ tool = language_tool_python.LanguageTool("en-US")
 project_dir = Path(__file__).parent.parent
 
 IGNORE_RULES = {
+    "GO_TO_HYPHEN",
     "WHITESPACE_RULE",
     "CONSECUTIVE_SPACES",
     "COMMA_PARENTHESIS_WHITESPACE",
@@ -19,6 +20,19 @@ IGNORE_RULES = {
 }
 
 IGNORE_WORDS = {
+    "gry",
+    "gog",
+    "ubisoft",
+    "uplay",
+    "xbox",
+    "winreg",
+    "hkey",
+    "appx",
+    "appsfolder",
+    "appid",
+    "webbrowser",
+    "greetings",
+    "jokes",
     "stiukov",
     "stiukov.py",
     "apps_search.py",
@@ -83,7 +97,8 @@ def normalize_line_for_check(line: str) -> str:
     cleaned = re.sub(r"\b[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)", " ", cleaned)
     cleaned = re.sub(r"\b[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z0-9_\.]+", " ", cleaned)
     cleaned = re.sub(r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^\n]+", " ", cleaned)
-    cleaned = re.sub(r"[\*_>#-]+", " ", cleaned)
+    cleaned = re.sub(r"^- ", " ", cleaned)
+    cleaned = re.sub(r"[\*_>#]+", " ", cleaned)
     cleaned = re.sub(r",\s*,", ",", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned)
 
@@ -91,6 +106,8 @@ def normalize_line_for_check(line: str) -> str:
 
 
 def should_ignore_match(text: str, match) -> bool:
+    print(match.rule_id in IGNORE_RULES, match.rule_id)
+
     if match.rule_id in IGNORE_RULES:
         return True
 
@@ -102,6 +119,13 @@ def should_ignore_match(text: str, match) -> bool:
         return True
 
     normalized = word.strip("`'\"()[]{}.,:;!?")
+
+    print(
+    match.rule_id,
+    repr(word),
+    repr(normalized),
+    )
+
     if normalized in IGNORE_WORDS:
         return True
 

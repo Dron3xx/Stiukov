@@ -15,7 +15,10 @@ from pathlib import Path
 # =========================
 # LOCAL MODULES
 # =========================
-from app.apps_search import launcher_search
+try:
+    from app.apps_search import launcher_search
+except ModuleNotFoundError:
+    from apps_search import launcher_search
 
 # =========================
 # VOICE
@@ -166,6 +169,9 @@ def respond(voice_data):
         speak("Going to sleep.")
         return
 
+    if text_operations(voice_data):
+        return
+
     if search_launchers(voice_data):
         return
 
@@ -278,6 +284,36 @@ def handle_volume(voice_data):
         volume.SetMute(1, None)
         speak("Muting")
         return True
+
+    return False
+
+
+def text_operations(voice_data):
+
+    if "save" in voice_data:
+        cleaned = re.sub(r"^save ", " ", voice_data)
+
+        text_file_path = things_directory / "texts"/ "text_file.txt"
+        text_to_past = ""
+        if cleaned != voice_data:
+            text_to_past = cleaned.strip(" ")
+        else:
+            before = pyperclip.paste()
+
+            pyautogui.hotkey("ctrl", "c")
+            time.sleep(0.2)
+
+            after = pyperclip.paste()
+
+            if after != before:
+                speak("Text is pasted")
+                text_to_past = after
+            else:
+                speak("What do you want to save?")
+                text_to_past = record_audio()
+
+        with open(text_file_path, "a", encoding="utf-8") as file:
+            file.write(text_to_past+ "\n")
 
     return False
 

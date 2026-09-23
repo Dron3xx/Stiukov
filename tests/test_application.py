@@ -6,7 +6,8 @@ from app.main import (
     handle_application,
     load_applications,
     search_and_save_launchers,
-    search_launchers
+    search_launchers,
+    text_operations
 )
 
 project_dir = Path(__file__).parent.parent
@@ -139,4 +140,67 @@ def test_close_application(
     mock_process_iter.assert_called_once_with(["name"])
     fake_process.terminate.assert_called_once()
     mock_speak.assert_called_once_with("Closing Steam")
+
+
+@patch("app.main.open")
+def test_text_operations_with_voice_text(
+        mock_open
+    ):
+    voice_data = "save text to save"
+    expected_text = "text to save"
+
+    text_operations(voice_data)
+
+    mock_open.return_value.__enter__().write.assert_called_once_with(
+        expected_text + "\n"
+    )
+
+
+@patch("app.main.open")
+@patch("app.main.pyperclip")
+@patch("app.main.pyautogui")
+def test_text_operations_with_clipboard(
+        mock_pyautogui,
+        mock_pyperclip,
+        mock_open
+    ):
+
+    expected_text = "text from selection"
+
+    mock_pyperclip.paste.side_effect = ["old clipboard", expected_text]
+
+    text_operations("save")
+
+    mock_pyautogui.hotkey.assert_called_once_with("ctrl", "c")
+
+    mock_open.return_value.__enter__().write.assert_called_once_with(
+        expected_text + "\n"
+    )
+
+
+@patch("app.main.open")
+@patch("app.main.pyperclip")
+@patch("app.main.pyautogui")
+@patch("app.main.record_audio")
+def test_text_operations_with_record_audio(
+        mock_record_audio,
+        mock_pyautogui,
+        mock_pyperclip,
+        mock_open
+    ):
     
+    expected_text = "text to save"
+    mock_record_audio.return_value = expected_text
+
+    clipboard_check = ""
+    mock_pyperclip.paste.side_effect = [clipboard_check, clipboard_check]
+
+    text_operations("save")
+
+    mock_pyautogui.hotkey.assert_called_once_with("ctrl", "c")
+
+    mock_record_audio.assert_called_once_with()
+
+    mock_open.return_value.__enter__().write.assert_called_once_with(
+        expected_text + "\n"
+    )

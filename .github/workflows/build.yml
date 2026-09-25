@@ -49,6 +49,7 @@ jobs:
         - name: Pytest Validation
           run: |
             python -c "import pytest; print(pytest.__version__)"
+            pytest --version
 
     build:
       needs: 

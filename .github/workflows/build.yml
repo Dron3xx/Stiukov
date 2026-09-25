@@ -48,7 +48,7 @@ jobs:
           
         - name: Pytest Validation
           run: |
-            pytest tests/application/test_application.py
+            pytest tests/application/test_architecture.py
 
     build:
       needs: 

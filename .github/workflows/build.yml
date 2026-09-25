@@ -48,7 +48,8 @@ jobs:
           
         - name: Pytest Validation
           run: |
-            pytest --collect-only -vv -p no:pytest_archon
+            pytest tests/test_documentation.py -v
+            pytest tests/test_architecture.py -v
 
     build:
       needs: 

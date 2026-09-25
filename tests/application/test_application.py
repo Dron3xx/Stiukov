@@ -10,7 +10,7 @@ from app.main import (
     text_operations
 )
 
-project_dir = Path(__file__).parent.parent
+project_dir = Path(__file__).parent.parent.parent
 
 
 def test_things_directory_exists():
@@ -156,13 +156,15 @@ def test_text_operations_with_voice_text(
     )
 
 
+@patch("app.main.speak")
 @patch("app.main.open")
 @patch("app.main.pyperclip")
 @patch("app.main.pyautogui")
 def test_text_operations_with_clipboard(
         mock_pyautogui,
         mock_pyperclip,
-        mock_open
+        mock_open,
+        mock_speak
     ):
 
     expected_text = "text from selection"
@@ -178,6 +180,7 @@ def test_text_operations_with_clipboard(
     )
 
 
+@patch("app.main.speak")
 @patch("app.main.open")
 @patch("app.main.pyperclip")
 @patch("app.main.pyautogui")
@@ -186,9 +189,10 @@ def test_text_operations_with_record_audio(
         mock_record_audio,
         mock_pyautogui,
         mock_pyperclip,
-        mock_open
+        mock_open,
+        mock_speak
     ):
-    
+
     expected_text = "text to save"
     mock_record_audio.return_value = expected_text
 

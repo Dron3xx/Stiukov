@@ -48,7 +48,7 @@ jobs:
           
         - name: Pytest Validation
           run: |
-            pytest tests/application/test_architecture.py
+            pytest tests/application/test_application.py::test_things_directory_exists tests/application/test_application.py::test_search_and_save_launchers tests/application/test_application.py::test_failed_search_launchers
 
     build:
       needs: 

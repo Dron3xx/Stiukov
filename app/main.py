@@ -338,16 +338,23 @@ def search_and_save_launchers():
 
     return True
 
+
+def ensure_applications_file():
+    if os.path.exists(applications_file_path):
+        return
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+
+    search_and_save_launchers()
+
+
 def search_launchers(voice_data):
     if "search applications" in voice_data:
         search_and_save_launchers()
         return True
 
     return False
-
-
-if not os.path.exists(applications_file_path):
-    search_and_save_launchers()
 
 
 def load_greetings():
@@ -368,13 +375,20 @@ jokes = load_jokes()
 
 
 def load_applications():
+    if not os.path.exists(applications_file_path):
+        return {}
+
     with open(applications_file_path, "r", encoding="utf-8") as file:
         applications_data = json.load(file)
-    return applications_data["applications"]
+    return applications_data.get("applications", {})
 
 applications = load_applications()
 
 if __name__ == "__main__":
+    ensure_applications_file()
+    applications.clear()
+    applications.update(load_applications())
+
     while True:
         try:
             # Listen continuously and recover from errors without exiting.

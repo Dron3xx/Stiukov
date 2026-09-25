@@ -45,10 +45,14 @@ jobs:
             python -m pip install --upgrade pip
             pip install -r requirements-dev.txt
             pip install -r requirements.txt
-          
-        - name: Pytest Validation
+        
+        - name: Test app main import
           run: |
             python -c "from app.main import handle_application; print('import ok')"
+
+        - name: Pytest Validation
+          run: |
+            pytest tests/application
 
     build:
       needs: 

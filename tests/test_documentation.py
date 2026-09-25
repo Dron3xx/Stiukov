@@ -73,7 +73,8 @@ IGNORE_WORDS = {
     "os.startfile",
     "win32api",
     "FileDescription",
-    "search disk()"
+    "search disk()",
+    "rm"
 }
 
 

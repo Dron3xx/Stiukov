@@ -158,7 +158,7 @@ The container runs the complete pytest suite automatically.
 
 A successful run should report all tests as passed, for example:
 
-================== 12 passed, 2 warnings in 77.74s ==================
+================== 15 passed, 2 warnings ==================
 
 The warnings currently come from the SpeechRecognition dependency using Python modules that are deprecated and planned for removal in Python 3.13. They do not currently cause test failures.
 

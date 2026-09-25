@@ -48,7 +48,7 @@ jobs:
           
         - name: Pytest Validation
           run: |
-            pytest tests/application -c NUL
+            pytest tests/application/test_application.py
 
     build:
       needs: 

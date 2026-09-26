@@ -23,9 +23,16 @@ except ModuleNotFoundError:
 # =========================
 # VOICE
 # =========================
-import speech_recognition as sr
-import pyttsx3
+
 import re
+from app.voice.speak import speak
+from app.voice.record_audio import record_audio
+from app.voice.activation.active import ( 
+    is_active,
+    activate,
+    deactivate,
+    wake_word_detector
+    )
 
 # =========================
 # COMPUTER CONTROL
@@ -38,7 +45,7 @@ import psutil
 # =========================
 # WEB
 # =========================
-import webbrowser as wb
+from app.handlers.web import web_handler
 
 # =========================
 # IMAGE / VISION
@@ -67,94 +74,15 @@ greetings_file_path = things_directory / "greetings.json"
 jokes_file_path = things_directory / "jokes.json"
 
 
-def is_stiukov(voice_data):
-    # Include common speech-recognition variations of the assistant name.
-    wake_words = [
-        "stuck off",
-        "stucco",
-        "stick off",
-        "sticker",
-        "sicko",
-        "stickers",
-        "tickle",
-        "sick off",
-        "stupid",
-        "take off",
-        "speaker",
-        "sick off"
-    ]
-
-    for word in wake_words:
-        pattern = rf"\b{re.escape(word)}\b"
-
-        if re.search(pattern, voice_data):
-            print(f"Wake word detected: {word}")
-            return word
-
-    return None
-
-assistant_active = False
-
-def wake_word_detector(voice_data):
-    global assistant_active
-
-    # Activate the assistant and remove the wake word before dispatching.
-    wake_word = is_stiukov(voice_data)
-
-    if wake_word:
-        assistant_active = True
-
-        voice_data = re.sub(
-            rf"\b{re.escape(wake_word)}\b",
-            "",
-            voice_data
-        ).strip()
-
-    return voice_data
-
-
-def speak(text):
-    engine = pyttsx3.init()
-    engine.setProperty("rate", 175)
-    engine.setProperty("volume", 1)
-
-    print(f"Stiukov: {text}")
-
-    engine.say(text)
-    engine.runAndWait()
-    engine.stop()
-
-
 def save_words_to_file(words):
     saved_words_file_path = os.path.join(project_dir, "saved_words.txt")
     with open(saved_words_file_path, "a", encoding="utf-8") as file:
         file.write(" ".join(words) + "\n")
 
 
-recognizer = sr.Recognizer()
-
-def record_audio(ask=False):
-    voice_data = ''
-    with sr.Microphone() as source:
-        if ask:
-            print(ask)
-        print("Listening...")
-        audio = recognizer.listen(source)
-        try:
-            print("Recognizing...")
-            voice_data = recognizer.recognize_google(audio, language='en-EN')
-            print(f"Recognized: {voice_data}")
-        except sr.UnknownValueError:
-            print('Speech not recognized')
-        except sr.RequestError as e:
-            print(f'Could not request results; {e}')
-    return voice_data.lower()
-
-
 def respond(voice_data):
-    global assistant_active
 
-    if not assistant_active:
+    if not is_active():
         print("assistant isn't active")
         return
 
@@ -163,9 +91,8 @@ def respond(voice_data):
         words = voice_data.split()
         save_words_to_file(words)
 
-
     if "go to sleep" in voice_data:
-        assistant_active = False
+        deactivate()
         speak("Going to sleep.")
         return
 
@@ -184,7 +111,7 @@ def respond(voice_data):
     if handle_application(voice_data):
         return
 
-    if handle_web_command(voice_data):
+    if web_handler(voice_data):
         return
 
     if handle_volume(voice_data):
@@ -244,14 +171,6 @@ def handle_application(voice_data):
 
             speak(app_name +" is not running")
             return True
-
-    return False
-
-def handle_web_command(voice_data):
-    if "open youtube" in voice_data:
-        wb.open("https://www.youtube.com")
-        speak("Opening YouTube.")
-        return True
 
     return False
 
@@ -397,7 +316,7 @@ if __name__ == "__main__":
             if not voice_data:
                 continue
 
-            if not assistant_active:
+            if not is_active():
                 voice_data = wake_word_detector(voice_data)
 
                 if not voice_data:

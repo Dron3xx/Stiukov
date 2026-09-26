@@ -1,0 +1,16 @@
+{
+    "websites": {
+        "youtube": {
+            "Name": "Youtube", 
+            "URL": "https://www.youtube.com" 
+        },
+        "github": {
+            "Name": "github", 
+            "URL": "https://github.com" 
+        },
+        "google": {
+            "Name": "google", 
+            "URL": "https://www.google.com" 
+        }
+    }
+}

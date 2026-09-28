@@ -1,6 +1,10 @@
+"""Manage the assistant wake-word activation state."""
+
 import re
 
-def is_stiukov(voice_data):
+
+def is_stiukov(voice_data: str) -> str | None:
+    """Return the detected wake word if the user is addressing the assistant."""
     # Include common speech-recognition variations of the assistant name.
     wake_words = [
         "stuck off",
@@ -14,7 +18,7 @@ def is_stiukov(voice_data):
         "stupid",
         "take off",
         "speaker",
-        "sick off"
+        "sick off",
     ]
 
     for word in wake_words:
@@ -30,25 +34,29 @@ def is_stiukov(voice_data):
 assistant_active = False
 
 
-def is_active():
+def is_active() -> bool:
+    """Return whether the assistant is currently active."""
     return assistant_active
 
 
-def activate():
+def activate() -> bool:
+    """Enable the assistant so it can respond to commands."""
     global assistant_active
     assistant_active = True
 
     return assistant_active
 
 
-def deactivate():
+def deactivate() -> bool:
+    """Disable the assistant and stop processing commands."""
     global assistant_active
     assistant_active = False
 
     return assistant_active
 
 
-def wake_word_detector(voice_data):
+def wake_word_detector(voice_data: str) -> str:
+    """Activate the assistant and strip the wake-word phrase from the command."""
     wake_word = is_stiukov(voice_data)
 
     if wake_word:
@@ -56,7 +64,7 @@ def wake_word_detector(voice_data):
         voice_data = re.sub(
             rf"\b{re.escape(wake_word)}\b",
             "",
-            voice_data
+            voice_data,
         ).strip()
 
     return voice_data

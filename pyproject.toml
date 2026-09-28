@@ -1,5 +1,7 @@
 [tool.ruff.lint]
-ignore = ["F401"]
+ignore = ["F401", "PLR0915"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "T201"]
+"tests/**/*.py" = ["S101", "T201", "I001"]
+"app/main.py" = ["F401", "I001"]
+"app/commands/jokes/joke.py = ["S311"]

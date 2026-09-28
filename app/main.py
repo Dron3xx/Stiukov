@@ -1,10 +1,12 @@
+"""Entry point for the voice assistant command loop."""
+
 # =========================
 # SYSTEM
 # =========================
 import os
 import sys
-import time
 import threading
+import time
 from pathlib import Path
 
 # =========================
@@ -63,17 +65,18 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
     ensure_applications_file()
 
 project_dir = Path(__file__).parent.parent
-
 things_dir = project_dir / "things"
 
-def save_words_to_file(words):
-    saved_words_file_path = os.path.join(things_dir, "saved_words.txt")
-    with open(saved_words_file_path, "a", encoding="utf-8") as file:
+
+def save_words_to_file(words: list[str]) -> None:
+    """Append recent spoken command words to the saved words log."""
+    saved_words_file_path = things_dir / "saved_words.txt"
+    with saved_words_file_path.open("a", encoding="utf-8") as file:
         file.write(" ".join(words) + "\n")
 
 
-def respond(voice_data):
-
+def respond(voice_data: str) -> None:
+    """Handle a recognized voice command and route it to the correct handler."""
     if not is_active():
         print("assistant isn't active")
         return
@@ -110,7 +113,6 @@ def respond(voice_data):
 
 
 if __name__ == "__main__":
-
     while True:
         try:
             # Listen continuously and recover from errors without exiting.

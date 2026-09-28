@@ -1,20 +1,25 @@
-import winreg
+"""Discover Windows apps, launchers, and game-related shortcuts."""
+
+import json
 import os
 import re
-from pathlib import Path
-import win32com.client
 import subprocess
-import json
+import winreg
+from pathlib import Path
+
+import win32com.client
 
 
-def exe_path(clear_command):
+def exe_path(clear_command: str) -> str | None:
+    """Extract an executable path from the registry command string."""
     match = re.search(r'["\']?([^"\']+\.exe)["\']?', clear_command, re.IGNORECASE)
     if match:
         return match.group(1)
     return None
 
 
-def find_lnk(lnk_path):
+def find_lnk(lnk_path: str | Path) -> str | None:
+    """Resolve the target path for a Windows shortcut file."""
     try:
         shell = win32com.client.Dispatch("WScript.Shell")
         shortcut = shell.CreateShortCut(str(lnk_path))
@@ -23,8 +28,11 @@ def find_lnk(lnk_path):
         return None
 
 
-def remove_duplicates(launchers):
-    unique_launchers = {}
+def remove_duplicates(
+    launchers: dict[str, dict[str, str | None]],
+) -> dict[str, dict[str, str | None]]:
+    """Keep only the first instance of each application path."""
+    unique_launchers: dict[str, dict[str, str | None]] = {}
 
     for name, data in launchers.items():
         path = data.get("Path")
@@ -33,36 +41,65 @@ def remove_duplicates(launchers):
             path_key = path.lower()
 
             if path_key not in [
-                (app.get("Path") or "").lower()
-                for app in unique_launchers.values()
-                ]:
+                (app.get("Path") or "").lower() for app in unique_launchers.values()
+            ]:
                 unique_launchers[name] = data
-
         else:
             unique_launchers[name] = data
 
     return unique_launchers
 
 
-def launcher_search():
-    launchers = {}
+def launcher_search() -> dict[str, dict[str, str | None]]:
+    """Search registries, start menu, and AppX metadata for launchers."""
+    launchers: dict[str, dict[str, str | None]] = {}
 
     protocol_blacklist = {
-        'http', 'https', 'ftp', 'mailto', 'tel', 'file', 'ms-', 'windows',
-        'chrome', 'firefox', 'opera', 'edge', 'discord', 'spotify', 'zoom',
-        'skype', 'teams', 'adobe', 'vscode', 'onenote', 'outlook', 'vlc'
-        }
+        "http",
+        "https",
+        "ftp",
+        "mailto",
+        "tel",
+        "file",
+        "ms-",
+        "windows",
+        "chrome",
+        "firefox",
+        "opera",
+        "edge",
+        "discord",
+        "spotify",
+        "zoom",
+        "skype",
+        "teams",
+        "adobe",
+        "vscode",
+        "onenote",
+        "outlook",
+        "vlc",
+    }
 
-    path_blacklist = {
-            r"\steamapps\common"
-        }
+    path_blacklist = {r"\steamapps\common"}
 
     game_key_words = [
-        'games', 'gry', 'steam', 'epic', 'battle.net', 'origin', 
-        'gog', 'ubisoft', 'uplay', 'riot', 'launcher', 'xbox', 'minecraft'
-        ]
-    def registry_search():
-        try: 
+        "games",
+        "gry",
+        "steam",
+        "epic",
+        "battle.net",
+        "origin",
+        "gog",
+        "ubisoft",
+        "uplay",
+        "riot",
+        "launcher",
+        "xbox",
+        "minecraft",
+    ]
+
+    def registry_search() -> dict[str, dict[str, str | None]]:
+        """Inspect Windows registry entries for launchable apps."""
+        try:
             root_key = winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "")
             value, _, _ = winreg.QueryInfoKey(root_key)
 
@@ -91,7 +128,7 @@ def launcher_search():
 
                             if clear_path and Path(clear_path).exists():
                                 full_str_path = clear_path.lower()
-                                
+
                                 if any(path in clear_path for path in path_blacklist):
                                     continue
 
@@ -104,13 +141,11 @@ def launcher_search():
                                             "Protocol": f"{key_name}://",
                                             "Keyword": x,
                                         }
-
                                         break
                     except FileNotFoundError:
                         pass
 
                     winreg.CloseKey(protocol)
-
                 except Exception:
                     continue
 
@@ -120,14 +155,14 @@ def launcher_search():
 
         return launchers
 
-
-    def start_menu_search():
+    def start_menu_search() -> dict[str, dict[str, str | None]]:
+        """Scan the Windows Start Menu for shortcut launchers."""
         appdata = os.environ.get("APPDATA", "")
         programdata = os.environ.get("PROGRAMDATA", "")
 
         start_menu_path = [
             Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
-            Path(programdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+            Path(programdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs",
         ]
 
         for start_path in start_menu_path:
@@ -150,25 +185,26 @@ def launcher_search():
                                         "Path": shortcut_point,
                                         "AppID": None,
                                         "Protocol": None,
-                                        "Keyword": x
+                                        "Keyword": x,
                                     }
                                     break
 
         return launchers
 
-
-    def appx_search():
+    def appx_search() -> dict[str, dict[str, str | None]]:
+        """Use PowerShell AppX metadata to find Windows Store launchers."""
         ps_command = (
-            'Get-StartApps | '
-            'Where-Object {$_.Name -like "*Minecraft*"} | '
-            'Select-Object Name, AppID | '
-            'ConvertTo-Json'
+            "Get-StartApps | "
+            "Where-Object {$_.Name -like \"*Minecraft*\"} | "
+            "Select-Object Name, AppID | "
+            "ConvertTo-Json"
         )
         results = subprocess.run(
-            ["powershell", "-Command", ps_command], 
-            capture_output=True, 
-            text=True, 
-            encoding='utf-8'
+            ["powershell", "-Command", ps_command],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
         )
 
         if results.stdout.strip():
@@ -185,7 +221,7 @@ def launcher_search():
                     "Path": app.get("InstallLocation"),
                     "AppID": app_id,
                     "Protocol": None,
-                    "Keyword": "minecraft"
+                    "Keyword": "minecraft",
                 }
         else:
             print("Nothing found")

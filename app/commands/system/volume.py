@@ -1,12 +1,16 @@
+"""Adjust the Windows system volume."""
+
 from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+
 from app.voice.speak import speak
 
 
-def volume_command(function):
+def volume_command(function: str) -> bool:
+    """Apply a volume action using the default speaker endpoint."""
     # Use the default Windows speaker endpoint for all volume commands.
     devices = AudioUtilities.GetSpeakers()
     volume = devices.EndpointVolume
-    
+
     if function == "up":
         current_volume = volume.GetMasterVolumeLevelScalar()
         new_volume = min(current_volume + 0.1, 1.0)

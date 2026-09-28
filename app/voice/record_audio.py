@@ -1,10 +1,13 @@
-import speech_recognition as sr
+"""Capture and transcribe spoken input from the microphone."""
 
+import speech_recognition as sr
 
 recognizer = sr.Recognizer()
 
-def record_audio(ask=False):
-    voice_data = ''
+
+def record_audio(ask: str | None = None) -> str:
+    """Listen for speech and return the recognized text in lower case."""
+    voice_data = ""
     with sr.Microphone() as source:
         if ask:
             print(ask)
@@ -12,10 +15,10 @@ def record_audio(ask=False):
         audio = recognizer.listen(source)
         try:
             print("Recognizing...")
-            voice_data = recognizer.recognize_google(audio, language='en-EN')
+            voice_data = recognizer.recognize_google(audio, language="en-EN")
             print(f"Recognized: {voice_data.lower()}")
         except sr.UnknownValueError:
-            print('Speech not recognized')
+            print("Speech not recognized")
         except sr.RequestError as e:
-            print(f'Could not request results; {e}')
+            print(f"Could not request results; {e}")
     return voice_data.lower()

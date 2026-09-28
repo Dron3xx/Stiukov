@@ -1,11 +1,18 @@
+"""Handle text-saving commands."""
+
+import re
+import time
+from collections.abc import Callable
+
 import pyautogui
 import pyperclip
-import time
-import re
-from app.voice.speak import speak
-from app.voice.record_audio import record_audio
 
-def text_operations(voice_data, save_text):
+from app.voice.record_audio import record_audio
+from app.voice.speak import speak
+
+
+def text_operations(voice_data: str, save_text: Callable[[str], bool]) -> bool:
+    """Save clipboard text or a spoken phrase requested by the user."""
     cleaned = re.sub(r"^save ", " ", voice_data)
 
     text_to_save = ""

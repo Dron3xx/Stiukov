@@ -4,32 +4,29 @@
 import os
 import sys
 import time
-import random
 import threading
 import subprocess
 import json
-import winreg
-import win32api
 from pathlib import Path
 
 # =========================
 # LOCAL MODULES
 # =========================
-try:
-    from app.apps_search import launcher_search
-except ModuleNotFoundError:
-    from apps_search import launcher_search
+from app.handlers.application import (
+    applications_handler, 
+    ensure_applications_file
+)
+from app.handlers.jokes import jokes_handler
+from app.handlers.greetings import greetings_handler
 
 # =========================
 # VOICE
 # =========================
 
-import re
 from app.voice.speak import speak
 from app.voice.record_audio import record_audio
 from app.voice.activation.active import ( 
     is_active,
-    activate,
     deactivate,
     wake_word_detector
     )
@@ -38,8 +35,7 @@ from app.voice.activation.active import (
 # COMPUTER CONTROL
 # =========================
 import keyboard
-import pyautogui
-import pyperclip
+from app.handlers.text import text_handler
 import psutil
 
 # =========================
@@ -57,7 +53,7 @@ from PIL import Image, ImageDraw, ImageFilter
 # =========================
 # AUDIO
 # =========================
-from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+from app.handlers.volume import volume_handler
 
 # =========================
 # AI / ML
@@ -65,13 +61,14 @@ from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
 from tensorflow.keras.models import load_model
 
 
+if not os.environ.get("PYTEST_CURRENT_TEST"):
+    ensure_applications_file()
+
 project_dir = Path(__file__).parent.parent
 
 things_directory = project_dir / "things"
 
 applications_file_path = things_directory / "applications.json"
-greetings_file_path = things_directory / "greetings.json"
-jokes_file_path = things_directory / "jokes.json"
 
 
 def save_words_to_file(words):
@@ -96,217 +93,28 @@ def respond(voice_data):
         speak("Going to sleep.")
         return
 
-    if text_operations(voice_data):
+    if text_handler(voice_data):
         return
 
-    if search_launchers(voice_data):
+    if greetings_handler(voice_data):
         return
 
-    if handle_greeting(voice_data):
+    if jokes_handler(voice_data):
         return
 
-    if handle_joke(voice_data):
-        return
-
-    if handle_application(voice_data):
+    if applications_handler(voice_data):
         return
 
     if web_handler(voice_data):
         return
 
-    if handle_volume(voice_data):
+    if volume_handler(voice_data):
         return
 
     speak("I can't help you with it yet")
 
 
-def handle_joke(voice_data):
-    if "joke" in voice_data:
-        joke = random.choice(list(jokes.values()))
-        speak(f'{joke["question"]} {joke["answer"]}')
-        return True
-
-    return False
-
-def handle_greeting(voice_data):
-    for greeting, response in greetings.items():
-        if greeting in voice_data:
-            speak(response)
-            return True
-
-    return False
-
-def handle_application(voice_data):
-    for app_name in applications:
-        # Normalize process names because Windows names are case-insensitive.
-        if "open "+ app_name.lower() in voice_data:
-            path = applications[app_name]["Path"]
-            app_id = applications[app_name]["AppID"]
-            if not path:
-                subprocess.run([
-                    "explorer.exe",
-                    f"shell:AppsFolder\\{app_id}"
-                ])
-            else:
-                os.startfile(path)
-
-            speak("Opening "+ app_name)
-            return True
-        if "close "+ app_name.lower() in voice_data:
-            process_name = applications[app_name]["process"].lower()
-            for process in psutil.process_iter(["name"]):
-                try:
-                    name = process.info["name"]
-
-                    if name and name.lower() == process_name:
-                        parent = process.parent()
-
-                        if parent and parent.name().lower() != process_name:
-                            process.terminate()
-                            speak("Closing " + app_name)
-                            return True
-
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-
-            speak(app_name +" is not running")
-            return True
-
-    return False
-
-
-def handle_volume(voice_data):
-    # Use the default Windows speaker endpoint for all volume commands.
-    devices = AudioUtilities.GetSpeakers()
-    volume = devices.EndpointVolume
-
-    if "volume up" in voice_data:
-        current_volume = volume.GetMasterVolumeLevelScalar()
-        new_volume = min(current_volume + 0.1, 1.0)
-        volume.SetMasterVolumeLevelScalar(new_volume, None)
-        speak("Volume up")
-        return True
-
-    if "volume down" in voice_data:
-        current_volume = volume.GetMasterVolumeLevelScalar()
-        new_volume = max(current_volume - 0.1, 0.0)
-        volume.SetMasterVolumeLevelScalar(new_volume, None)
-        speak("Volume down")
-        return True
-
-    if "unmute" in voice_data:
-        volume.SetMute(0, None)
-        speak("Unmuting")
-        return True
-
-    if "mute" in voice_data:
-        volume.SetMute(1, None)
-        speak("Muting")
-        return True
-
-    return False
-
-
-def text_operations(voice_data):
-
-    if "save" in voice_data:
-        cleaned = re.sub(r"^save ", " ", voice_data)
-
-        text_file_path = things_directory / "texts"/ "text_file.txt"
-        text_to_past = ""
-        if cleaned != voice_data:
-            text_to_past = cleaned.strip(" ")
-        else:
-            before = pyperclip.paste()
-
-            pyautogui.hotkey("ctrl", "c")
-            time.sleep(0.2)
-
-            after = pyperclip.paste()
-
-            if after != before:
-                speak("Text is pasted")
-                text_to_past = after
-            else:
-                speak("What do you want to save?")
-                text_to_past = record_audio()
-
-        with open(text_file_path, "a", encoding="utf-8") as file:
-            file.write(text_to_past+ "\n")
-
-    return False
-
-
-def search_and_save_launchers():
-    launchers = launcher_search()
-
-    if not launchers:
-        print("No launchers found")
-        return False
-
-    with open(applications_file_path, "w", encoding="utf-8") as file:
-        json.dump(
-            {"applications": launchers},
-            file,
-            indent=4,
-            ensure_ascii=False
-        )
-
-    speak("Found and saved launchers to applications file")
-    print(f"Saved {len(launchers)} launchers to applications.json")
-
-    return True
-
-
-def ensure_applications_file():
-    if os.path.exists(applications_file_path):
-        return
-
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return
-
-    search_and_save_launchers()
-
-
-def search_launchers(voice_data):
-    if "search applications" in voice_data:
-        search_and_save_launchers()
-        return True
-
-    return False
-
-
-def load_greetings():
-    # Keep response text in JSON so it can be edited without changing logic.
-    with open(greetings_file_path, "r", encoding="utf-8") as file:
-        greetings_data = json.load(file)
-    return greetings_data["greetings"]
-
-greetings = load_greetings()
-
-
-def load_jokes():
-    with open(jokes_file_path, "r", encoding="utf-8") as file:
-        jokes_data = json.load(file)
-    return jokes_data["jokes"]
-
-jokes = load_jokes()
-
-
-def load_applications():
-    if not os.path.exists(applications_file_path):
-        return {}
-
-    with open(applications_file_path, "r", encoding="utf-8") as file:
-        applications_data = json.load(file)
-    return applications_data.get("applications", {})
-
-applications = load_applications()
-
 if __name__ == "__main__":
-    ensure_applications_file()
-    applications.clear()
-    applications.update(load_applications())
 
     while True:
         try:

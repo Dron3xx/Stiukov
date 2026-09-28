@@ -1,0 +1,8 @@
+{
+    "volume": {
+        "volume up": "up",
+        "volume down": "down",
+        "unmute": "unmute",
+        "mute": "mute"
+    }
+}

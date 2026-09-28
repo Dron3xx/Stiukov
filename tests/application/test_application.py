@@ -7,8 +7,25 @@ from app.main import (
     load_applications,
     search_and_save_launchers,
     search_launchers,
-    text_operations
 )
+# =========================
+# HANDLERS
+# =========================
+
+
+
+# =========================
+# COMMANDS
+# =========================
+
+from app.commands.system.text import text_operations
+
+# =========================
+# MEMORY
+# =========================
+
+from app.memory.system.text import text
+
 
 project_dir = Path(__file__).parent.parent.parent
 
@@ -142,69 +159,118 @@ def test_close_application(
     mock_speak.assert_called_once_with("Closing Steam")
 
 
-@patch("app.main.open")
-def test_text_operations_with_voice_text(
-        mock_open
-    ):
+
+def test_text_operations_with_voice_text():
+    mock_save_text = MagicMock()
     voice_data = "save text to save"
     expected_text = "text to save"
 
-    text_operations(voice_data)
-
-    mock_open.return_value.__enter__().write.assert_called_once_with(
-        expected_text + "\n"
+    text_operations(
+        voice_data,
+        mock_save_text
     )
 
+    mock_save_text.assert_called_once_with(expected_text)
 
-@patch("app.main.speak")
-@patch("app.main.open")
-@patch("app.main.pyperclip")
-@patch("app.main.pyautogui")
+
+@patch("app.commands.system.text.speak")
+@patch("app.commands.system.text.pyperclip")
+@patch("app.commands.system.text.pyautogui")
 def test_text_operations_with_clipboard(
         mock_pyautogui,
         mock_pyperclip,
-        mock_open,
         mock_speak
     ):
-
+    mock_save_text = MagicMock()
     expected_text = "text from selection"
 
     mock_pyperclip.paste.side_effect = ["old clipboard", expected_text]
 
-    text_operations("save")
+    text_operations("save", mock_save_text)
 
     mock_pyautogui.hotkey.assert_called_once_with("ctrl", "c")
 
-    mock_open.return_value.__enter__().write.assert_called_once_with(
-        expected_text + "\n"
+    mock_save_text.assert_called_once_with(
+        expected_text
     )
 
+    mock_speak.assert_called_once_with("Text is pasted")
 
-@patch("app.main.speak")
-@patch("app.main.open")
-@patch("app.main.pyperclip")
-@patch("app.main.pyautogui")
-@patch("app.main.record_audio")
+
+@patch("app.commands.system.text.speak")
+@patch("app.commands.system.text.pyperclip")
+@patch("app.commands.system.text.pyautogui")
+@patch("app.commands.system.text.record_audio")
 def test_text_operations_with_record_audio(
         mock_record_audio,
         mock_pyautogui,
         mock_pyperclip,
-        mock_open,
         mock_speak
     ):
-
+    mock_save_text = MagicMock()
     expected_text = "text to save"
     mock_record_audio.return_value = expected_text
 
     clipboard_check = ""
     mock_pyperclip.paste.side_effect = [clipboard_check, clipboard_check]
 
-    text_operations("save")
+    text_operations("save", mock_save_text)
 
     mock_pyautogui.hotkey.assert_called_once_with("ctrl", "c")
 
     mock_record_audio.assert_called_once_with()
 
-    mock_open.return_value.__enter__().write.assert_called_once_with(
-        expected_text + "\n"
+    mock_save_text.assert_called_once_with(
+        expected_text
     )
+
+    mock_speak.assert_called_once_with("What do you want to save?")
+
+
+def test_save_text_saved_data(
+    tmp_path
+):
+    text.text_file_path = tmp_path / "texts.json"
+
+    text.save_text("Terraform")
+
+    with open(text.text_file_path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+
+    assert data["texts"]["1"] == "Terraform"
+
+
+def test_save_text_id_generation(
+    tmp_path
+):
+    text.text_file_path = tmp_path / "texts.json"
+
+    text.save_text("Terraform")
+    text.save_text("Ansible")
+
+    with open(text.text_file_path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    assert data["texts"]["1"] == "Terraform"
+    assert data["texts"]["2"] == "Ansible"
+
+
+def test_save_text_empty_file(
+    tmp_path
+):
+    text.text_file_path = tmp_path / "texts.json"
+
+    data = {
+        "texts": {}
+    }
+
+    with open(text.text_file_path, "w", encoding="utf-8") as file:
+        json.dump(data, file)
+
+    text.save_text("Terraform")
+
+    with open(text.text_file_path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    assert data["texts"]["1"] == "Terraform"

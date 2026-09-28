@@ -20,10 +20,9 @@ RUN Invoke-WebRequest ` \
 COPY requirements.txt .
 COPY requirements-dev.txt .
 
-RUN python.exe -m pip install --upgrade pip
-
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir -r requirements-dev.txt
+RUN python.exe -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; \
+    pip install --no-cache-dir -r requirements.txt; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; \
+    pip install --no-cache-dir -r requirements-dev.txt; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 COPY . .
 

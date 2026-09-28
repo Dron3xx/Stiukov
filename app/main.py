@@ -64,9 +64,10 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
 
 project_dir = Path(__file__).parent.parent
 
+things_dir = project_dir / "things"
 
 def save_words_to_file(words):
-    saved_words_file_path = os.path.join(project_dir, "saved_words.txt")
+    saved_words_file_path = os.path.join(things_dir, "saved_words.txt")
     with open(saved_words_file_path, "a", encoding="utf-8") as file:
         file.write(" ".join(words) + "\n")
 

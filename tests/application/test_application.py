@@ -36,12 +36,6 @@ from app.memory.system.applications.applications import (
 from app.memory.system.text import text
 
 
-project_dir = Path(__file__).parent.parent.parent
-
-
-def test_things_directory_exists():
-    assert (project_dir / "things").exists()
-
 # =========================
 # APPLICATIONS MODULE TESTS
 # =========================

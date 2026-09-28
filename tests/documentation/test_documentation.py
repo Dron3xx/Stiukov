@@ -1,8 +1,11 @@
+"""Tests that project documentation meets language checks."""
+
 import re
 from pathlib import Path
 
 import language_tool_python
 import regex
+from language_tool_python.match import Match
 
 tool = language_tool_python.LanguageTool("en-US")
 project_dir = Path(__file__).parent.parent
@@ -71,15 +74,15 @@ IGNORE_WORDS = {
     "search_disk",
     "read_file_metadata",
     "os.startfile",
-    "win32api",
     "FileDescription",
     "search disk()",
-    "rm"
+    "rm",
 }
 
 
 def markdown_to_plain_text(md_text: str) -> str:
-    md_text = re.sub(r"```.*?```", "\n", md_text, flags=re.S)
+    """Remove Markdown syntax while preserving readable text."""
+    md_text = re.sub(r"```.*?```", "\n", md_text, flags=re.DOTALL)
     md_text = re.sub(r"!\[.*?\]\(.*?\)", "", md_text)
     md_text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", md_text)
     md_text = re.sub(r"`([^`]+)`", r"\1", md_text)
@@ -90,8 +93,8 @@ def markdown_to_plain_text(md_text: str) -> str:
 
 
 def normalize_line_for_check(line: str) -> str:
-
-    cleaned = re.sub(r"```.*?```", " ", line, flags=re.S)
+    """Normalize one Markdown line before grammar checking."""
+    cleaned = re.sub(r"```.*?```", " ", line, flags=re.DOTALL)
     cleaned = re.sub(r"!\[.*?\]\(.*?\)", "", cleaned)
     cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", cleaned)
     cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
@@ -106,7 +109,8 @@ def normalize_line_for_check(line: str) -> str:
     return cleaned.strip()
 
 
-def should_ignore_match(text: str, match) -> bool:
+def should_ignore_match(text: str, match: Match) -> bool:
+    """Return whether a grammar match is intentionally ignored."""
     print(match.rule_id in IGNORE_RULES, match.rule_id)
 
     if match.rule_id in IGNORE_RULES:
@@ -130,29 +134,45 @@ def should_ignore_match(text: str, match) -> bool:
     if normalized in IGNORE_WORDS:
         return True
 
-    if any(token in normalized for token in (
-        "stiukov", "py", "psutil", "pycaw", "opencv",
-        "numpy", "tensorflow", "apps", "handle_",
-        "search_", "record_", "read_", "json", "dll",
-        "startfile", "win32api", "filedescription", "ctypes"
-        )):
-        return True
+    return any(
+        token in normalized
+        for token in (
+            "stiukov",
+            "py",
+            "psutil",
+            "pycaw",
+            "opencv",
+            "numpy",
+            "tensorflow",
+            "apps",
+            "handle_",
+            "search_",
+            "record_",
+            "read_",
+            "json",
+            "dll",
+            "startfile",
+            "win32api",
+            "filedescription",
+            "ctypes",
+        )
+    )
 
-    return False
 
-
-def should_ignore_word(word):
+def should_ignore_word(word: str) -> bool:
+    """Return whether a token is in the documentation ignore list."""
     return word.lower() in IGNORE_WORDS
 
 
-def check_md_grammar():
+def check_md_grammar() -> dict[str, dict[str, list[dict[str, object]]]]:
+    """Collect grammar and suspicious-word findings from Markdown files."""
     results = {}
     for md_path in project_dir.rglob("*.md"):
         if ".pytest_cache" in md_path.parts:
             continue
 
         lines = md_path.read_text(encoding="utf-8").splitlines()
-        grammar_issues  = []
+        grammar_issues = []
         suspicious_word_issues = []
         in_code_block = False
 
@@ -179,16 +199,18 @@ def check_md_grammar():
                     "plain": cleaned_line,
                 })
 
-            for word in regex.findall(
-                r"\b(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]+\b",
-                cleaned_line):
-                if should_ignore_word(word):
-                    continue
-                suspicious_word_issues.append({
+            suspicious_word_issues.extend(
+                {
                     "line": line_number,
                     "word": word,
                     "source": raw_line.strip(),
-                })
+                }
+                for word in regex.findall(
+                    r"\b(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]+\b",
+                    cleaned_line,
+                )
+                if not should_ignore_word(word)
+            )
 
         results[str(md_path)] = {
             "grammar": grammar_issues,
@@ -197,7 +219,8 @@ def check_md_grammar():
 
     return results
 
-def test_documentation_grammar():
+def test_documentation_grammar() -> None:
+    """Assert that project Markdown has no unignored language findings."""
     issues = check_md_grammar()
 
     for path, results in issues.items():
@@ -215,7 +238,10 @@ def test_documentation_grammar():
 
         print("Suspicious words:", path, len(suspicious_word_issues))
         for item in suspicious_word_issues:
-            print(f" - Line {item['line']}: Suspicious word with digit | {item['word']}")
+            print(
+                f" - Line {item['line']}: Suspicious word with digit | "
+                f"{item['word']}",
+            )
             print(f"   Source: {item['source'][:160]}")
 
         assert not suspicious_word_issues

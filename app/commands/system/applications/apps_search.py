@@ -23,9 +23,10 @@ def find_lnk(lnk_path: str | Path) -> str | None:
     try:
         shell = win32com.client.Dispatch("WScript.Shell")
         shortcut = shell.CreateShortCut(str(lnk_path))
-        return shortcut.TargetPath
-    except Exception:
+        target_path = shortcut.TargetPath
+    except Exception:  # noqa: BLE001 - shortcut lookup is best-effort; continue on broken .lnk metadata.
         return None
+    return target_path
 
 
 def remove_duplicates(
@@ -50,7 +51,8 @@ def remove_duplicates(
     return unique_launchers
 
 
-def launcher_search() -> dict[str, dict[str, str | None]]:
+ # Coordinates three distinct Windows launcher sources and their fallbacks.
+def launcher_search() -> dict[str, dict[str, str | None]]:  # noqa: C901, PLR0915
     """Search registries, start menu, and AppX metadata for launchers."""
     launchers: dict[str, dict[str, str | None]] = {}
 
@@ -97,7 +99,8 @@ def launcher_search() -> dict[str, dict[str, str | None]]:
         "minecraft",
     ]
 
-    def registry_search() -> dict[str, dict[str, str | None]]:
+    # Keeps per-entry recovery local while scanning multiple registry sources.
+    def registry_search() -> dict[str, dict[str, str | None]]:  # noqa: C901
         """Inspect Windows registry entries for launchable apps."""
         try:
             root_key = winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "")
@@ -146,12 +149,12 @@ def launcher_search() -> dict[str, dict[str, str | None]]:
                         pass
 
                     winreg.CloseKey(protocol)
-                except Exception:
+                except Exception:  # noqa: BLE001, S112 - skip one malformed registry entry and continue scanning the rest.
                     continue
 
             winreg.CloseKey(root_key)
-        except Exception as e:
-            print(f"Registry read error: {e}")
+        except Exception as e:  # noqa: BLE001 - keep the fallback registry scan resilient to unexpected Windows registry failures.
+            print(f"Registry read error: {e}")  # noqa: T201 - report why the best-effort registry source failed.
 
         return launchers
 
@@ -195,12 +198,14 @@ def launcher_search() -> dict[str, dict[str, str | None]]:
         """Use PowerShell AppX metadata to find Windows Store launchers."""
         ps_command = (
             "Get-StartApps | "
-            "Where-Object {$_.Name -like \"*Minecraft*\"} | "
+            'Where-Object {$_.Name -like "*Minecraft*"} | '
             "Select-Object Name, AppID | "
             "ConvertTo-Json"
         )
-        results = subprocess.run(
-            ["powershell", "-Command", ps_command],
+        # The command is fixed application logic; only the executable is resolved
+        # via PATH.
+        results = subprocess.run(  # noqa: S603
+            ["powershell", "-Command", ps_command],  # noqa: S607
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -224,7 +229,7 @@ def launcher_search() -> dict[str, dict[str, str | None]]:
                     "Keyword": "minecraft",
                 }
         else:
-            print("Nothing found")
+            print("Nothing found")  # noqa: T201 - report the empty search result to CLI users.
         return launchers
 
     appx_search()
@@ -237,17 +242,17 @@ def launcher_search() -> dict[str, dict[str, str | None]]:
 
 
 if __name__ == "__main__":
-    print("Searching for games launchers")
+    print("Searching for games launchers")  # noqa: T201 - CLI progress output.
     results = launcher_search()
     results = remove_duplicates(results)
 
     if results:
         for app, data in results.items():
-            print(f" App: [ {app} ]")
-            print(f"   -> Protocol: {data['Protocol']}")
-            print(f"   -> Path: {data['Path']}\n")
-            print(f"   -> Keyword: {data['Keyword']}")
+            print(f" App: [ {app} ]")  # noqa: T201 - CLI result output.
+            print(f"   -> Protocol: {data['Protocol']}")  # noqa: T201 - CLI result output.
+            print(f"   -> Path: {data['Path']}\n")  # noqa: T201 - CLI result output.
+            print(f"   -> Keyword: {data['Keyword']}")  # noqa: T201 - CLI result output.
             if data.get("AppID"):
-                print(f"   -> AppID: {data.get('AppID')}")
+                print(f"   -> AppID: {data.get('AppID')}")  # noqa: T201 - CLI result output.
     else:
-        print("No launcher found")
+        print("No launcher found")  # noqa: T201 - CLI result output.

@@ -1,7 +1,17 @@
+[tool.ruff]
+line-length = 100
+
 [tool.ruff.lint]
-ignore = ["F401", "PLR0915"]
+ignore = ["F401"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "T201", "I001"]
-"app/main.py" = ["F401", "I001"]
-"app/commands/jokes/joke.py = ["S311"]
+"tests/**/*.py" = ["S101", "T201", "I001", "INP001"]
+"tests/application/test_application.py" = ["F401"]
+"tests/documentation/test_documentation.py" = ["C901"]
+"app/voice/**/*.py" = ["T201"]
+"app/voice/activation/active.py" = ["PLW0603"]
+"app/commands/system/applications/apps_operations.py" = ["T201", "PERF203"]
+"app/main.py" = ["F401", "I001", "PLR0911"]
+"app/commands/jokes/joke.py" = ["S311"]
+"*" = ["CPY001"]
+"app/commands/system/volume.py" = ["F401"]

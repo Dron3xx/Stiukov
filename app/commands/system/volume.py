@@ -18,19 +18,19 @@ def volume_command(function: str) -> bool:
         speak("Volume up")
         return True
 
-    elif function == "down":
+    if function == "down":
         current_volume = volume.GetMasterVolumeLevelScalar()
         new_volume = max(current_volume - 0.1, 0.0)
         volume.SetMasterVolumeLevelScalar(new_volume, None)
         speak("Volume down")
         return True
 
-    elif function == "unmute":
+    if function == "unmute":
         volume.SetMute(0, None)
         speak("Unmuting")
         return True
 
-    elif function == "mute":
+    if function == "mute":
         volume.SetMute(1, None)
         speak("Muting")
         return True

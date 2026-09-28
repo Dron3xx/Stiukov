@@ -1,0 +1,1 @@
+"""Persist user-provided text."""

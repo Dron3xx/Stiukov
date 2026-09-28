@@ -13,8 +13,8 @@ from pathlib import Path
 # LOCAL MODULES
 # =========================
 from app.handlers.applications import (
-    applications_handler, 
-    ensure_applications_file
+    applications_handler,
+    ensure_applications_file,
 )
 from app.handlers.jokes import jokes_handler
 from app.handlers.greetings import greetings_handler
@@ -25,11 +25,11 @@ from app.handlers.greetings import greetings_handler
 
 from app.voice.speak import speak
 from app.voice.record_audio import record_audio
-from app.voice.activation.active import ( 
+from app.voice.activation.active import (
     is_active,
     deactivate,
-    wake_word_detector
-    )
+    wake_word_detector,
+)
 
 # =========================
 # COMPUTER CONTROL
@@ -78,7 +78,7 @@ def save_words_to_file(words: list[str]) -> None:
 def respond(voice_data: str) -> None:
     """Handle a recognized voice command and route it to the correct handler."""
     if not is_active():
-        print("assistant isn't active")
+        print("assistant isn't active")  # noqa: T201 - visible assistant status.
         return
 
     if voice_data:
@@ -129,5 +129,5 @@ if __name__ == "__main__":
 
             respond(voice_data)
 
-        except Exception as error:
-            print(f"The assistant recovered from an error: {error}")
+        except Exception as error:  # noqa: BLE001 - keep the assistant loop alive during unexpected runtime failures.
+            print(f"The assistant recovered from an error: {error}")  # noqa: T201 - visible recovery status.

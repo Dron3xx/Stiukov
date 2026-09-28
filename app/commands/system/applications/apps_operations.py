@@ -20,7 +20,7 @@ def search_and_save_applications(
         print("No apps found")
         return False
 
-    speak("Found and saved launchers to applications file")
+    speak("Found and saved applications to applications file")
     print(f"Saved {len(apps_to_save)} launchers to applications.json")
     return save_applications(apps_to_save)
 
@@ -30,12 +30,13 @@ def open_app(apps: dict[str, dict[str, str | None]], app_name: str) -> bool:
     path = apps[app_name]["Path"]
     app_id = apps[app_name]["AppID"]
     if not path:
-        subprocess.run(
-            ["explorer.exe", f"shell:AppsFolder\\{app_id}"],
+        # AppID comes from the locally discovered applications registry.
+        subprocess.run(  # noqa: S603
+            ["explorer.exe", f"shell:AppsFolder\\{app_id}"],  # noqa: S607
             check=False,
         )
     else:
-        startfile(path)
+        startfile(path)  # noqa: S606 - use the Windows shell association API.
 
     speak("Opening " + app_name)
     return True
@@ -44,6 +45,7 @@ def open_app(apps: dict[str, dict[str, str | None]], app_name: str) -> bool:
 def close_app(apps: dict[str, dict[str, str | None]], app_name: str) -> bool:
     """Close a running app by matching its process name to the saved metadata."""
     process_name = apps[app_name]["process"].lower()
+    # Handle dead or inaccessible processes individually and keep searching.
     for process in psutil.process_iter(["name"]):
         try:
             name = process.info["name"]

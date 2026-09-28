@@ -6,6 +6,7 @@ as ``app.main`` rather than a copied namespace.
 """
 
 import sys
+
 from app import main as _app_main
 
 sys.modules[__name__] = _app_main

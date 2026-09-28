@@ -1,0 +1,1 @@
+"""Persist website metadata."""

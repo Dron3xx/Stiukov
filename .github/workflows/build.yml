@@ -43,7 +43,7 @@ jobs:
 
         - name: Ruff Validation
           run: |
-            ruff check . --select F, B, S, BLE, RET
+            ruff check . --select F,B,S,BLE,RET
 
         - name: Docker Validation
           uses: hadolint/hadolint-action@v3.5.0

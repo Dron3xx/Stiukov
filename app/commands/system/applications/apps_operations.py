@@ -1,6 +1,6 @@
 import subprocess
 import psutil
-import os
+from os import startfile
 from app.voice.speak import speak
 
 def search_and_save_applications(
@@ -30,7 +30,7 @@ def open_app(
             f"shell:AppsFolder\\{app_id}"
         ])
     else:
-        os.startfile(path)
+        startfile(path)
 
     speak("Opening "+ app_name)
     return True

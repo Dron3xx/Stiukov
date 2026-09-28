@@ -2,28 +2,37 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.main import (
-    handle_application,
-    load_applications,
-    search_and_save_launchers,
-    search_launchers,
-)
+
 # =========================
 # HANDLERS
 # =========================
 
-
+from app.handlers.applications import (
+    applications_handler,
+    ensure_applications_file
+)
 
 # =========================
 # COMMANDS
 # =========================
 
+from app.commands.system.applications.apps_operations import (
+    search_and_save_applications,
+    open_app,
+    close_app
+)
+from app.commands.system.applications.apps_search import launcher_search
 from app.commands.system.text import text_operations
 
 # =========================
 # MEMORY
 # =========================
 
+from app.memory.system.applications.applications import (
+    load_applications,
+    save_applications,
+    applications_file_exists
+)
 from app.memory.system.text import text
 
 
@@ -33,82 +42,51 @@ project_dir = Path(__file__).parent.parent.parent
 def test_things_directory_exists():
     assert (project_dir / "things").exists()
 
+# =========================
+# APPLICATIONS MODULE TESTS
+# =========================
 
-@patch("app.main.launcher_search")
-@patch("app.main.speak")
-def test_search_and_save_launchers(
+@patch("app.commands.system.applications.apps_operations.speak")
+def test_search_and_save_applications(
         mock_speak,
-        mock_launcher_search, 
-        tmp_path
     ):
-    mock_launcher_search.return_value = {
+    mock_launcher_search = MagicMock()
+    mock_save_applications = MagicMock()
+    found_applications  = {
         "Steam": {
             "Path": "fake_path",
             "AppID": None,
             "Protocol": None,
             "Keyword": "steam"
         }
-    }    
-    test_file = tmp_path / "applications.json"
+    }
 
-    with patch("main.applications_file_path", test_file):
-        assert search_and_save_launchers()
+    mock_launcher_search.return_value = found_applications
+
+    assert search_and_save_applications(
+        mock_launcher_search,
+        mock_save_applications
+    )
 
     mock_launcher_search.assert_called_once()
-
-    assert test_file.exists()
-
-
-@patch("app.main.launcher_search")
-def test_failed_search_launchers(mock_search_and_save):
-
-    mock_search_and_save.return_value = {}
-
-    assert search_and_save_launchers() is False
-    mock_search_and_save.assert_called_once()
+    mock_save_applications.assert_called_once_with(found_applications)
 
 
-@patch("main.search_and_save_launchers")
-def test_search_launchers(mock_search_and_save):
+def test_failed_search_launchers():
+    mock_launcher_search = MagicMock()
+    mock_save_applications = MagicMock()
 
-    result = search_launchers("search applications")
+    mock_launcher_search.return_value = {}
 
-    assert result
-    mock_search_and_save.assert_called_once()
+    assert search_and_save_applications(mock_launcher_search, mock_save_applications) is False
 
-
-@patch("app.main.search_and_save_launchers")
-def test_failed_seatch_launchers(mock_search_and_save):
-
-    result = search_launchers("hi")
-
-    assert result is False
-    mock_search_and_save.assert_not_called()
+    mock_launcher_search.assert_called_once()
+    mock_save_applications.assert_not_called()
 
 
-def test_load_applications(tmp_path):
-
-    test_file = tmp_path / "applications.json"
-
-    test_data = {
-        "applications": {
-            "Steam": {
-                "Path": "fake_path"
-            }
-        }
-    }
-    with open(test_file, "w", encoding="utf-8") as file:
-        json.dump(test_data, file)
-
-    with patch("main.applications_file_path", test_file):
-        result = load_applications()
-
-    assert result == test_data["applications"]
-
-
-@patch("app.main.os.startfile")
-@patch("app.main.speak")
-def test_open_application(
+@patch("app.commands.system.applications.apps_operations.startfile")
+@patch("app.commands.system.applications.apps_operations.speak")
+def test_open_app(
         mock_speak,
         mock_startfile
     ):
@@ -119,17 +97,16 @@ def test_open_application(
         "process": "steam.exe"
         }
     }
-    with patch("main.applications", fake_applications):
-        result = handle_application("open steam")
 
-    assert result is True
+    assert open_app(fake_applications, "Steam")
+
     mock_startfile.assert_called_once_with("fake_path")
     mock_speak.assert_called_once_with("Opening Steam")
 
 
-@patch("app.main.psutil.process_iter")
-@patch("app.main.speak")
-def test_close_application(
+@patch("app.commands.system.applications.apps_operations.psutil.process_iter")
+@patch("app.commands.system.applications.apps_operations.speak")
+def test_close_app(
         mock_speak,
         mock_process_iter
     ):
@@ -150,15 +127,92 @@ def test_close_application(
 
     mock_process_iter.return_value = [fake_process]
 
-    with patch("main.applications", fake_applications):
-        result = handle_application("close steam")
+    assert close_app(fake_applications, "Steam")
 
-    assert result is True
     mock_process_iter.assert_called_once_with(["name"])
     fake_process.terminate.assert_called_once()
     mock_speak.assert_called_once_with("Closing Steam")
 
+@patch("app.handlers.applications.search_and_save_applications")
+def test_applications_handler(mock_search_and_save):
 
+    result = applications_handler("search applications")
+
+    assert result
+    mock_search_and_save.assert_called_once()
+
+
+@patch("app.handlers.applications.search_and_save_applications")
+def test_failed_applications_handler(mock_search_and_save):
+
+    result = applications_handler("hi")
+
+    assert result is False
+    mock_search_and_save.assert_not_called()
+
+
+def test_load_applications(tmp_path):
+
+    test_file = tmp_path / "applications.json"
+
+    test_data = {
+        "applications": {
+            "Steam": {
+                "Path": "fake_path"
+            }
+        }
+    }
+    with open(test_file, "w", encoding="utf-8") as file:
+        json.dump(test_data, file)
+
+    with patch("app.memory.system.applications.applications.applications_file_path", test_file):
+        result = load_applications()
+
+    assert result == test_data["applications"]
+
+
+def test_save_applications(tmp_path):
+
+    test_file = tmp_path / "applications.json"
+
+    test_data = {
+        "applications": {
+            "Steam": {
+                "Path": "fake_path"
+            }
+        }
+    }
+
+    with patch("app.memory.system.applications.applications.applications_file_path", test_file):
+        save_applications(test_data)
+
+    with open(test_file, "r", encoding="utf-8") as file:
+        data_to_test = json.load(file)
+
+    assert data_to_test["applications"] == test_data
+
+
+@patch("app.memory.system.applications.applications.applications_file_path")
+def test_applications_file_exists(
+    mock_applications_file_path
+):
+    mock_applications_file_path.exists.return_value = True
+
+    assert applications_file_exists()
+
+
+@patch("app.memory.system.applications.applications.applications_file_path")
+def test_failed_applications_file_exists(
+    mock_applications_file_path
+):
+    mock_applications_file_path.exists.return_value = False
+
+    assert applications_file_exists() == False
+
+
+# =========================
+# TEXTS MODULE TESTS
+# =========================
 
 def test_text_operations_with_voice_text():
     mock_save_text = MagicMock()

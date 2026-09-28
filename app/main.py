@@ -5,14 +5,12 @@ import os
 import sys
 import time
 import threading
-import subprocess
-import json
 from pathlib import Path
 
 # =========================
 # LOCAL MODULES
 # =========================
-from app.handlers.application import (
+from app.handlers.applications import (
     applications_handler, 
     ensure_applications_file
 )
@@ -65,10 +63,6 @@ if not os.environ.get("PYTEST_CURRENT_TEST"):
     ensure_applications_file()
 
 project_dir = Path(__file__).parent.parent
-
-things_directory = project_dir / "things"
-
-applications_file_path = things_directory / "applications.json"
 
 
 def save_words_to_file(words):

@@ -225,5 +225,8 @@ __marimo__/
 saved_words.txt
 
 # Local paths
+benchmark/models
+benchmark/recordings
+benchamrk/results
 app/memory/system/text/texts.json
 app/memory/system/applications/applications.json

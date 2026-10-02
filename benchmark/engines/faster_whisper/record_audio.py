@@ -49,4 +49,3 @@ while True:
 
         if is_speech:
             audio_buffer.append(frame)
-

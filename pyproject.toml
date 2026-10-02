@@ -5,7 +5,7 @@ line-length = 100
 ignore = ["F401"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "T201", "I001", "INP001"]
+"tests/**/*.py" = ["S101", "T201", "I001", "INP001", "D100"]
 "tests/application/test_application.py" = ["F401"]
 "tests/documentation/test_documentation.py" = ["C901"]
 "app/voice/**/*.py" = ["T201"]

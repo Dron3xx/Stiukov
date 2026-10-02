@@ -20,6 +20,8 @@ def is_stiukov(voice_data: str) -> str | None:
         "take off",
         "speaker",
         "sick off",
+        "stick-off",
+        "sikov",
     ]
 
     for word in wake_words:

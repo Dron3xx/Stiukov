@@ -1,4 +1,6 @@
-speechrecognition
+faster-whisper
+sounddevice
+silero-vad
 pyttsx3
 keyboard
 pyautogui

@@ -64,7 +64,7 @@ from tensorflow.keras.models import load_model
 if not os.environ.get("PYTEST_CURRENT_TEST"):
     ensure_applications_file()
 
-project_dir = Path(__file__).parent.parent
+project_dir = Path(__file__).parent[2]
 things_dir = project_dir / "things"
 
 

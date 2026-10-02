@@ -12,6 +12,8 @@ quality_result = subprocess.run(
         ".",
         "--select",
         "ANN,D,E,W,I,COM,Q,PTH,UP,C901,PLR,PERF",
+        "--ignore",
+        "D203,D213",
     ],
     check=False,
 )

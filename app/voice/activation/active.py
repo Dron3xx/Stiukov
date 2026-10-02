@@ -7,6 +7,7 @@ def is_stiukov(voice_data: str) -> str | None:
     """Return the detected wake word if the user is addressing the assistant."""
     # Include common speech-recognition variations of the assistant name.
     wake_words = [
+        "stukov",
         "stuck off",
         "stucco",
         "stick off",

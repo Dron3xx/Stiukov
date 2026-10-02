@@ -37,7 +37,7 @@ audio_files = [
     if p.is_file() and p.suffix.lower() in audio_extensions
 ]
 
-print(f"Znaleziono plików: {len(audio_files)}")
+print(f"files found: {len(audio_files)}")
 for p in audio_files:
     print(p)
 

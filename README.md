@@ -2,25 +2,28 @@
 
 ## Overview
 
-Stiukov is a Windows-focused Python voice assistant. It continuously listens through the default microphone and uses Google Speech Recognition to interpret spoken commands. The assistant can respond to greetings and jokes, open and close configured applications, search Windows for game and launcher entries, open YouTube, and control the system volume.
+Stiukov is a Windows-focused Python voice assistant. It captures microphone audio with `sounddevice`, detects speech with Silero VAD, and transcribes English speech with `faster-whisper` using Whisper Large on CUDA with FP16. It can answer configured greetings and jokes, save text, open websites, discover and control selected Windows applications, and adjust system volume.
 
-The assistant uses a local application state: it remains inactive until a configured wake word is detected and remains active until the `go to sleep` command is received.
+The assistant remains inactive until it detects a configured wake-word variation. It then processes commands until it receives `go to sleep`.
 
 ## Technologies Used
 
 - Python
 - Windows
-- SpeechRecognition
+- faster-whisper (Whisper Large, CUDA, FP16)
+- sounddevice and Silero VAD
 - pyttsx3
+- NumPy
+- pyautogui and pyperclip
 - psutil
 - pycaw
 
 ## Requirements
 
 - Windows 10 or 11
-- Python 3.10 or newer
+- Python 3.11.x is used by CI; the Docker image uses Python 3.14.7
 - A working microphone
-- Internet access for Google Speech Recognition
+- A CUDA-capable NVIDIA GPU and compatible CUDA runtime for the configured Whisper model
 - Dependencies from `requirements.txt`
 
 ## Installation
@@ -33,37 +36,26 @@ python -m pip install -r requirements.txt
 
 ## Running the Assistant
 
-From the project root:
+From the project root, run:
 
 ```powershell
 python -m app.main
 ```
 
-The assistant can also be started directly:
-
-```powershell
-python app\main.py
-```
-
-After starting, the assistant continuously listens through the default microphone.
-
-The assistant initially waits for a configured wake word. After activation, recognized speech is passed to the command handlers until `go to sleep` is received.
+The application initializes the Windows application catalog when it is missing, then continuously listens through the default microphone. Speak a configured wake-word variation to activate command handling; say `go to sleep` to return to the inactive state.
 
 ## Current Command Patterns
 
 The current implementation supports:
 
 - configured wake-word variations to activate the assistant
-- greeting phrases loaded from `things/greetings.json`
+- greeting phrases loaded from `app/memory/greetings/greetings.json`
 - jokes containing the word `joke`
-- `open <application>` to launch an application from the generated catalog
-- `close <application>` to terminate a matching running process
-- `search applications` to rebuild the local application catalog
-- `open youtube`
-- `volume up`
-- `volume down`
-- `mute`
-- `unmute`
+- `save <text>` to save spoken text, or `save` to save selected clipboard text (with spoken fallback)
+- `open <website>` for a website configured in `app/memory/web/websites.json`
+- `open <application>` and `close <application>` for entries in the generated application catalog
+- `search applications` to rebuild that catalog
+- `volume up`, `volume down`, `mute`, and `unmute`, as configured in `app/memory/system/volume/volume.json`
 - `go to sleep` to deactivate the assistant
 
 ## Application Discovery
@@ -74,7 +66,7 @@ The discovery process checks:
 
 - Windows Registry protocol handlers
 - Start Menu `.lnk` shortcuts
-- Windows AppX launcher information through PowerShell `Get-StartApps`
+- Windows AppX launcher information through PowerShell `Get-StartApps` (currently filtered for Minecraft)
 
 The search is focused on game and launcher-related entries using configured keywords such as:
 
@@ -92,9 +84,9 @@ The search is focused on game and launcher-related entries using configured keyw
 - `xbox`
 - `minecraft`
 
-The resulting catalog is stored in `things/applications.json`.
+The catalog is stored at `app/memory/system/applications/applications.json`.
 
-If the catalog does not exist when the application starts, Stiukov generates it automatically. The catalog can also be regenerated with:
+If the catalog does not exist when the application starts, Stiukov generates it automatically. It can also be regenerated with:
 
 ```text
 search applications
@@ -105,42 +97,38 @@ search applications
 ```text
 Stiukov/
 ├── app/
-│   ├── __init__.py
-│   ├── apps_search.py
-│   └── main.py
-├── commands/
-├── memory/
+│   ├── main.py
+│   ├── commands/       # Perform speech, text, web, volume, and app actions
+│   ├── handlers/       # Route recognized text to commands and data
+│   ├── memory/         # JSON-backed settings and saved data
+│   └── voice/          # Audio capture, wake-word state, and speech output
 ├── tests/
+│   ├── application/
+│   └── documentation/
+├── benchmark/
+│   ├── engines/        # faster-whisper, sherpa-onnx, and Vosk experiments
+│   └── recordings/     # Speech recordings organized by scenario
 ├── things/
-│   ├── greetings.json
-│   └── jokes.json
+│   └── saved_words.txt
 ├── Dockerfile
 ├── README.md
 ├── explained.md
+├── pyproject.toml
+├── pytest.ini
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── run_tests.py
-├── saved_words.txt
-├── voice/
+├── main.py            # Compatibility alias for app.main
 └── .gitignore
 ```
 
-`things/applications.json` is generated at runtime when the application catalog does not exist and is not part of the checked-in repository structure.
+Greeting, joke, website, and volume data live under `app/memory`. The application catalog and saved text data are also stored there; `things/saved_words.txt` receives recognized command words at runtime. The root `main.py` provides a compatibility import path; use `python -m app.main` to start the application.
 
 ## Docker Test Environment
 
-The project includes a Windows-based Docker environment used to run the test suite in a reproducible environment and reduce "works on my machine" issues.
+The project includes a Windows-based Docker image for running the configured quality checks and application tests in a Windows environment.
 
-The container is based on Windows Server Core with Python 3.11 and includes the dependencies required by the application and test suite, including:
-
-- Java 17 for LanguageTool
-- Microsoft Visual C++ Redistributable
-- application dependencies
-- development and testing dependencies
-- pytest
-- OpenCV Headless
-
-The Docker environment is intended primarily for testing rather than running the full Stiukov assistant.
+The container is based on Windows Server Core with Python 3.14.7. The Dockerfile installs runtime and development requirements plus the Microsoft Visual C++ Redistributable. Its default command runs `run_tests.py`. The image is a test environment, not a documented way to run the microphone-driven assistant.
 
 ### Running Tests
 
@@ -148,35 +136,22 @@ Build the Docker image:
 
 ```powershell
 docker build -t stiukov-tests .
+docker run --rm stiukov-tests
 ```
 
-Run the test suite:
+`run_tests.py` runs two Ruff rule groups and `pytest tests/application`. The documentation grammar test is a separate test module and is not included in this default command. The runner currently gates its exit status on the second Ruff check and the application tests; it records but does not gate on the first quality-check result.
 
-docker run --rm stiukov-tests
+## Development Workflow
 
-The container runs the complete pytest suite automatically.
+Run `python run_tests.py` locally, or build and run the Windows Docker image with the commands above.
 
-A successful run should report all tests as passed, for example:
+For the application tests alone, run `python -m pytest tests/application`. GitHub Actions uses Python 3.11.x for lint and application tests and Python 3.14.7 in the Docker image; it also runs Hadolint.
 
-================== 15 passed, 2 warnings ==================
-
-The warnings currently come from the SpeechRecognition dependency using Python modules that are deprecated and planned for removal in Python 3.13. They do not currently cause test failures.
-
-Development Workflow
-
-Docker is used as an additional reproducible test environment:
-
-Develop and test changes locally.
-Run the test suite locally during development.
-Run the Docker test environment after significant changes.
-Use the Docker test run as a final environment-independent verification before committing changes.
-
-This helps detect platform-specific dependency and environment issues that may not appear during local development.
 
 ## Notes
 
 - The project is Windows-specific because it uses Windows APIs and components such as `winreg`, `os.startfile`, Windows audio APIs, and PowerShell.
-- Speech recognition uses Google Speech Recognition and therefore requires an internet connection.
+- Speech-to-text uses faster-whisper and the current configuration requests Whisper Large with CUDA and FP16.
 - Application discovery focuses on game and launcher-related entries rather than every installed application.
-- Recognized command words are appended to `saved_words.txt` during runtime.
+- Recognized command words are appended to `things/saved_words.txt` during runtime.
 - Application launching and closing depend on the generated application catalog and Windows process information.

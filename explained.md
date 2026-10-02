@@ -4,32 +4,33 @@
 
 Stiukov is a Windows desktop voice assistant implemented in Python.
 
-The main runtime logic is located in `app/main.py`. The launcher discovery functionality is separated into `app/apps_search.py`.
+The runtime entry point is `app/main.py`. It coordinates the voice loop and dispatches recognized text to handlers in `app/handlers/`. Handlers match requests and connect command implementations in `app/commands/` with persisted data in `app/memory/`. Voice input, activation state, and speech output are in `app/voice/`.
 
 The application follows a simple runtime flow:
 
-1. Start the Python application.
-2. Load paths to the JSON data files.
-3. Generate the application catalog if it does not exist.
-4. Load greetings, jokes, and applications.
-5. Continuously listen through the default microphone.
-6. Wait for a configured wake word while inactive.
-7. Process recognized speech through the command dispatcher.
-8. Keep the assistant active until `go to sleep` is received.
+1. Start `python -m app.main`.
+2. Ensure the application catalog exists, generating it from Windows sources when needed.
+3. Initialize microphone capture, Silero VAD, and the configured Whisper model outside test mode.
+4. Transcribe detected English speech and normalize the returned text to lowercase.
+5. While inactive, wait for a configured wake-word variation; then route the remaining text through `respond()`.
+6. Keep processing commands until `go to sleep` deactivates the assistant.
 
-The application uses local Python and Windows APIs for control and Google Speech Recognition for speech-to-text; it does not use a separate conversational AI backend.
+Speech-to-text uses local `faster-whisper`; the application has no separate conversational AI backend.
 
 ## 1) Project Structure
 
-The most important runtime files are:
+The application is organized by responsibility:
 
-- `app/main.py` — main event loop, wake-word handling, speech recognition, command dispatch, application control, web commands, and volume control
-- `app/apps_search.py` — Windows launcher discovery and application catalog generation
-- `things/greetings.json` — greeting phrases and responses
-- `things/jokes.json` — joke question and answer data
-- `saved_words.txt` — runtime log of recognized command words
+- `app/main.py` — startup, active/inactive state checks, logging, and command dispatch
+- `app/handlers/` — route recognized text to matching commands
+- `app/commands/` — perform text, speech, web, volume, and Windows application actions
+- `app/memory/` — load and save JSON-backed greetings, jokes, websites, volume mappings, application metadata, and saved text
+- `app/voice/` — microphone capture and STT, wake-word state, and local speech output
+- `tests/application/` — application behavior and architecture tests
+- `tests/documentation/` — a separate LanguageTool-based Markdown check
+- `benchmark/engines/` and `benchmark/recordings/` — standalone STT experiments and scenario recordings, not the assistant's runtime path
 
-`things/applications.json` is generated during runtime and is not part of the checked-in repository structure.
+The root `main.py` is a compatibility alias for `app.main`. The recognized-word log is `things/saved_words.txt`. The application catalog is stored at `app/memory/system/applications/applications.json`; the other configurable and saved JSON data lives alongside its corresponding `app/memory` module.
 
 ---
 
@@ -44,13 +45,7 @@ What this does:
 
 How it works:
 
-`main.py` determines the project directory from the location of the Python file and creates paths for:
-
-- `things/applications.json`
-- `things/greetings.json`
-- `things/jokes.json`
-
-This avoids relying on the current working directory when locating the data files.
+Each memory module defines a path relative to its own file, so stored data does not depend on the process working directory. Greetings, jokes, websites, and volume mappings have JSON files in their corresponding memory packages. Saved text is written to `app/memory/system/text/texts.json`.
 
 ### Application catalog initialization
 
@@ -60,9 +55,9 @@ What this does:
 
 How it works:
 
-At startup, the application checks whether `things/applications.json` exists.
+At import/startup, `app.main` calls `ensure_applications_file()` unless `PYTEST_CURRENT_TEST` is set. The handler checks whether `app/memory/system/applications/applications.json` exists.
 
-If it does not exist, `search_and_save_launchers()` calls `launcher_search()` from `app/apps_search.py` and saves the discovered launchers as JSON.
+If it does not exist, the handler passes `launcher_search()` and `save_applications()` to `search_and_save_applications()`. The search implementation is in `app/commands/system/applications/apps_search.py`; persistence is in `app/memory/system/applications/applications.py`.
 
 Why this matters:
 
@@ -81,23 +76,7 @@ What this does:
 - checks recognized speech for configured variations of the assistant's name
 - returns the first matching wake-word variant
 
-The current code contains these configured variations:
-
-```text
-stuck off
-stucco
-stick off
-sticker
-sicko
-stickers
-tickle
-sick off
-stupid
-take off
-speaker
-```
-
-The `sick off` entry appears twice in the current list. The duplicate does not change the documented behavior, so it is represented only once here.
+The current code keeps the wake-word variations in `app/voice/activation/active.py`. They include speech-recognition spellings such as `stukov`, `stuck off`, `stucco`, and `stick off`; the list is source-controlled and can be changed there.
 
 How it works:
 
@@ -143,13 +122,13 @@ What this does:
 
 How it works:
 
-The application continuously calls `record_audio()`.
+When `app.main` runs as the entry point, its loop continuously calls the public `record_audio(ask: str | None = None) -> str` function from `app.voice.record_audio`.
 
 When speech is recognized:
 
-- if the assistant is inactive, `wake_word_detector()` checks for a wake word
+- if the assistant is inactive, `wake_word_detector()` checks for and removes a wake word
 - if no wake word is found, the input is ignored
-- if the assistant is active, or a wake word activated it, the remaining speech is passed to `respond()`
+- otherwise, the remaining speech is passed to `respond()`
 
 The loop is wrapped in exception handling, so an unexpected runtime error is printed instead of immediately terminating the assistant.
 
@@ -166,24 +145,21 @@ This creates the core behavior of a continuously running voice assistant rather 
 What this does:
 
 - captures audio from the default microphone
-- sends the captured audio to Google Speech Recognition
+- detects speech with Silero VAD and transcribes it with faster-whisper
 - converts the recognized text to lowercase
-- returns an empty string when no speech was successfully recognized
+- returns the recognized text after a speech segment ends
 
 How it works:
 
-The function creates a microphone source through `speech_recognition`, records audio with the recognizer, and calls:
+`record_audio(ask: str | None = None) -> str` forwards the request to a module-level `AudioCapture` instance. Outside test mode, that instance is constructed when `app.voice.record_audio` is imported. `AudioCapture` owns the model, `sounddevice` stream, audio queue, VAD iterator, and frame buffer.
 
-```python
-recognizer.recognize_google(audio, language="en-EN")
-```
+The capture is mono at 16 kHz. `sounddevice` calls `audio_callback()`, which enqueues input arrays. The recording loop flattens each queued chunk into a persistent NumPy frame buffer. When at least 512 samples are available, it removes one 512-sample frame for Silero VAD and keeps any remaining samples for later processing.
 
-The recognized text is printed and then normalized with `.lower()` before being returned.
+The VAD iterator is configured with a 500 ms minimum silence and a 100 ms speech pad. A pre-audio buffer retains up to four frames (128 ms at 16 kHz). On a speech-start result, the previous buffered frames are added before the speech frames. On an end result, the accumulated audio is transcribed with `self.model.transcribe(..., language="en")`; segment text is joined with spaces, lowercased, and returned.
 
-The current implementation handles:
+`AudioCapture` initializes `WhisperModel("large", device="cuda", compute_type="float16")`, so actual transcription requires the configured CUDA environment. The model and microphone stream are initialized once for the module-level capture object.
 
-- `sr.UnknownValueError` when speech cannot be understood
-- `sr.RequestError` when the recognition service cannot be reached
+The test fixture sets `STIUKOV_TESTING=1`. In that mode, the audio libraries are not imported and the `AudioCapture` instance is not created; tests that exercise audio call sites mock `record_audio` instead of capturing from a microphone.
 
 Why this matters:
 
@@ -220,7 +196,7 @@ What this does:
 
 How it works:
 
-The dispatcher first checks for:
+`respond()` returns immediately if `is_active()` is false. For active input, it appends recognized words to the log and first checks for:
 
 ```text
 go to sleep
@@ -230,12 +206,12 @@ If found, it sets `assistant_active` to `False` and stops processing that comman
 
 Otherwise, it checks the handlers in this order:
 
-1. `search_launchers()`
-2. `handle_greeting()`
-3. `handle_joke()`
-4. `handle_application()`
-5. `handle_web_command()`
-6. `handle_volume()`
+1. `text_handler()`
+2. `greetings_handler()`
+3. `jokes_handler()`
+4. `applications_handler()`
+5. `web_handler()`
+6. `volume_handler()`
 
 Each handler returns `True` when it handles the command, causing `respond()` to return immediately.
 
@@ -253,13 +229,13 @@ Centralizing command routing keeps individual command implementations separate w
 
 What this does:
 
-- appends recognized command words to `saved_words.txt`
+- appends recognized command words to `things/saved_words.txt`
 
 How it works:
 
 `respond()` splits recognized speech into words and passes them to `save_words_to_file()`.
 
-The words are appended to the project-level `saved_words.txt` file.
+The words are appended to the project-level `things/saved_words.txt` file.
 
 Why this matters:
 
@@ -274,28 +250,32 @@ The application maintains a simple local history of recognized command input wit
 The application loads greeting data from:
 
 ```text
-things/greetings.json
+app/memory/greetings/greetings.json
 ```
 
 `load_greetings()` reads the JSON file and returns the `greetings` collection.
 
-`handle_greeting()` then checks the recognized speech against the configured greeting phrases and speaks the associated response when a match is found.
+`greetings_handler()` checks the recognized speech against the configured phrases and calls `greeting_command()` to speak the associated response when a match is found.
 
 ### Jokes
 
 The application loads joke data from:
 
 ```text
-things/jokes.json
+app/memory/jokes/jokes.json
 ```
 
 `load_jokes()` reads the JSON file and returns the `jokes` collection.
 
-`handle_joke()` checks whether the recognized speech contains the word `joke`. When it does, it selects one of the available jokes and speaks its question and answer.
+`jokes_handler()` checks whether the recognized speech contains the word `joke`. When it does, `joke_command()` selects one of the available jokes and speaks its question and answer.
+
+### Websites and volume mappings
+
+Website records are loaded from `app/memory/web/websites.json`; `web_handler()` matches `open <name>` and `web_command()` opens the configured URL with Python's `webbrowser`. Volume phrases and their actions are loaded from `app/memory/system/volume/volume.json`; the volume command uses `pycaw` to adjust the default Windows speaker endpoint.
 
 Why this matters:
 
-Keeping response content in JSON separates user-facing text from the command-processing logic. New greetings or jokes can therefore be added without changing the corresponding Python handler.
+Keeping response content and command mappings in JSON separates user-facing data from command-processing logic. Entries can be changed without rewriting the corresponding handler or command implementation.
 
 ---
 
@@ -392,21 +372,21 @@ The same application can be discovered through multiple Windows sources. Dedupli
 
 ## 11) Application Catalog Generation
 
-### `search_and_save_launchers()`
+### `search_and_save_applications()`
 
 What this does:
 
 - runs launcher discovery
-- saves the results into `things/applications.json`
+- saves the results into `app/memory/system/applications/applications.json`
 - informs the user about the generated catalog
 
 How it works:
 
-The function calls `launcher_search()`.
+The function calls the supplied `launcher_search()` callable.
 
 If no launchers are found, it returns `False`.
 
-Otherwise, it writes the discovered application data to `things/applications.json`.
+Otherwise, it writes the discovered application data through `save_applications()`.
 
 ### `search applications`
 
@@ -416,13 +396,13 @@ What this does:
 
 How it works:
 
-`search_launchers()` checks whether the recognized speech contains:
+`applications_handler()` checks whether the recognized speech contains:
 
 ```text
 search applications
 ```
 
-When detected, it calls `search_and_save_launchers()` and returns `True`.
+When detected, it calls `search_and_save_applications()` and returns its result.
 
 Why this matters:
 
@@ -432,7 +412,7 @@ The application catalog can be refreshed without manually editing the generated 
 
 ## 12) Application Launch and Close
 
-### `handle_application()`
+### `applications_handler()`, `open_app()`, and `close_app()`
 
 What this does:
 
@@ -441,7 +421,7 @@ What this does:
 
 How it works:
 
-For an `open <application>` command, the function searches the loaded application definitions.
+For an `open <application>` command, `applications_handler()` searches the loaded application definitions and calls `open_app()` for a matching name.
 
 If an executable path exists, the application is started with:
 
@@ -451,7 +431,7 @@ os.startfile(path)
 
 If the entry does not have a path, the function attempts to open the Windows AppsFolder using the stored AppID.
 
-For a `close <application>` command, the function reads the configured process name and iterates through running processes using `psutil`.
+For a `close <application>` command, `applications_handler()` calls `close_app()`, which reads the configured process name and iterates through running processes using `psutil`.
 
 When a matching process is found and its parent process is different from the target process, it is terminated.
 
@@ -465,21 +445,21 @@ This functionality is Windows-specific and depends on Windows process informatio
 
 ## 13) Web Command
 
-### `handle_web_command()`
+### `web_handler()` and `web_command()`
 
 What this does:
 
-- opens YouTube when the user requests it
+- opens a website configured in `app/memory/web/websites.json`
 
 How it works:
 
-The handler checks for:
+The handler loads the website mapping and checks for:
 
 ```text
-open youtube
+open <website name>
 ```
 
-and calls `webbrowser.open()` with the YouTube address.
+For a matching configured website, `web_command()` calls `webbrowser.open()` with its URL and speaks a confirmation.
 
 Why this matters:
 
@@ -489,7 +469,7 @@ It provides a simple browser action without requiring a separate browser automat
 
 ## 14) Volume Control
 
-### `handle_volume()`
+### `volume_handler()` and `volume_command()`
 
 What this does:
 
@@ -500,7 +480,7 @@ What this does:
 
 How it works:
 
-The function obtains the default Windows speaker endpoint through `pycaw`.
+`volume_handler()` reads phrase-to-action mappings from `app/memory/system/volume/volume.json`. `volume_command()` obtains the default Windows speaker endpoint through `pycaw`.
 
 For volume changes, it reads the current master volume level and changes it by `0.1`, keeping the result between `0.0` and `1.0`.
 
@@ -523,17 +503,32 @@ The assistant can control basic system audio directly through Windows audio APIs
 
 ## 15) Supporting Files and Tests
 
-The repository contains:
+### Test setup
 
-- `requirements.txt` — runtime dependencies
-- `requirements-dev.txt` — development and testing dependencies
-- `run_tests.py` — test/lint execution entry point
-- `tests/` — project tests
-- `Dockerfile` — container configuration present in the repository
-- `saved_words.txt` — local runtime word log
-- `things/` — JSON data used by the assistant
+`pytest.ini` adds the repository root to the import path. Before test modules are imported, `tests/conftest.py` sets `STIUKOV_TESTING=1`. `app.voice.record_audio` checks this variable and skips importing the audio libraries and creating its `AudioCapture` instance. Tests patch audio call sites rather than opening a microphone or loading Whisper.
 
-The documentation describes only behavior that is part of the current application flow. Repository files that are not involved in the current runtime behavior should not be interpreted as active assistant features solely because they exist.
+`tests/application/test_application.py` covers application, handler, command, and JSON persistence behavior with mocks and temporary files. `tests/application/test_architecture.py` checks layer boundaries with `pytest-archon`. `tests/documentation/test_documentation.py` contains a LanguageTool-based Markdown check over Markdown files under `tests/`; it is a separate test module and is not run by the default project runner.
+
+### Test and lint commands
+
+Run the configured checks locally with:
+
+```powershell
+python run_tests.py
+```
+
+The script runs two Ruff commands and then `pytest tests/application`. The first Ruff result is stored but is not included in the final exit-status condition; failures from the second Ruff command or application tests do cause a nonzero exit.
+
+### Docker and CI
+
+The Dockerfile uses `python:3.14.7-windowsservercore-ltsc2022`, installs both requirements files and the Microsoft Visual C++ Redistributable, copies the repository, and defaults to `python run_tests.py`:
+
+```powershell
+docker build -t stiukov-tests .
+docker run --rm stiukov-tests
+```
+
+The GitHub Actions workflow runs on pushes to `main`. Ubuntu jobs use Python 3.11.x for Ruff; the quality-check job is configured with `continue-on-error`, while the code-validation job also runs Hadolint. A Windows 2022 job uses Python 3.11.x to install the requirements and run `pytest tests/application`. A separate Windows job builds and runs the Docker image and depends on code validation and pytest. Therefore, the Python used by the Docker test run (3.14.7) differs from the Python used by the CI pytest job (3.11.x).
 
 ---
 
@@ -552,7 +547,7 @@ Load greetings / jokes / applications
        ↓
 Listen through microphone
        ↓
-Speech Recognition
+faster-whisper transcription
        ↓
 Assistant inactive?
    ┌───┴───┐
@@ -586,7 +581,7 @@ This creates a persistent local voice-assistant loop.
 The current code implements:
 
 1. continuous microphone listening
-2. Google Speech Recognition
+2. English speech transcription with faster-whisper (Whisper Large, CUDA, FP16)
 3. configurable wake-word activation
 4. an active/inactive assistant state
 5. centralized command dispatch
@@ -598,7 +593,7 @@ The current code implements:
 11. Windows master-volume control
 12. local logging of recognized words
 
-The application is currently a Windows-specific Python voice assistant based on speech recognition, pattern matching, local Windows APIs, and generated application metadata.
+The application is currently a Windows-specific Python voice assistant based on faster-whisper transcription, pattern matching, local Windows APIs, and generated application metadata.
 
 ## Summary
 
@@ -606,4 +601,4 @@ Stiukov combines voice input, local text-to-speech, command dispatch, Windows ap
 
 The architecture separates the main assistant runtime from launcher discovery, while JSON files keep response content and generated application metadata outside the main command-handling logic.
 
-The current implementation uses Google Speech Recognition for speech-to-text, local Windows APIs for system control, and does not use a separate conversational AI backend.
+The current implementation uses faster-whisper with Whisper Large on CUDA and FP16 for speech-to-text, together with local Windows APIs for system control. It does not use a separate conversational AI backend.
